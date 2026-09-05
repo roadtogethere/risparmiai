@@ -8,10 +8,7 @@ import '../notifiers/savings_chat_notifier.dart';
 class SavingsCheckerPage extends StatefulWidget {
   const SavingsCheckerPage({
     super.key,
-    required this.notifier,
   });
-
-  final SavingsChatNotifier notifier;
 
   @override
   State<SavingsCheckerPage> createState() => _SavingsCheckerPageState();
@@ -28,90 +25,71 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<SavingsChatNotifier>.value(
-      value: widget.notifier,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Verifica Risparmio'),
-          centerTitle: true,
-        ),
-        body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: <Widget>[
-              Expanded(
-                child: Consumer<SavingsChatNotifier>(
-                  builder: (context, notifier, _) {
-                    final messages = notifier.messages;
+    final notifier = context.watch<SavingsChatNotifier>();
 
-                    return ListView.builder(
-                      reverse: true,
-                      itemCount: messages.length,
-                      itemBuilder: (context, index) {
-                        final message = messages[messages.length - 1 - index];
-                        final isUser = message.sender == ChatMessageSender.user;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Verifica Risparmio'),
+        centerTitle: true,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: <Widget>[
+            Expanded(
+              child: ListView.builder(
+                reverse: true,
+                itemCount: notifier.messages.length,
+                itemBuilder: (context, index) {
+                  final message = notifier.messages[notifier.messages.length - 1 - index];
+                  final isUser = message.sender == ChatMessageSender.user;
 
-                        return Align(
-                          alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(vertical: 6),
-                            padding: const EdgeInsets.all(12),
-                            constraints: const BoxConstraints(maxWidth: 320),
-                            decoration: BoxDecoration(
-                              color: isUser ? Colors.blue.shade600 : Colors.grey.shade200,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Text(
-                              message.text,
-                              style: TextStyle(
-                                color: isUser ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-              Consumer<SavingsChatNotifier>(
-                builder: (context, notifier, _) {
-                  if (notifier.analyzedProducts.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-
-                  return _ProductInsightCard(products: notifier.analyzedProducts);
+                  return Align(
+                    alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 6),
+                      padding: const EdgeInsets.all(12),
+                      constraints: const BoxConstraints(maxWidth: 320),
+                      decoration: BoxDecoration(
+                        color: isUser ? Colors.blue.shade600 : Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        message.text,
+                        style: TextStyle(
+                          color: isUser ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ),
+                  );
                 },
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      decoration: const InputDecoration(
-                        hintText: 'Es: confronta i costi di carta igienica e detersivo',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (_) => _submitPrompt(context),
+            ),
+            const SizedBox(height: 12),
+            if (notifier.analyzedProducts.isNotEmpty)
+              _ProductInsightCard(products: notifier.analyzedProducts),
+            const SizedBox(height: 12),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: const InputDecoration(
+                      hintText: 'Es: confronta i costi di carta igienica e detersivo',
+                      border: OutlineInputBorder(),
                     ),
+                    onSubmitted: (_) => _submitPrompt(context),
                   ),
-                  const SizedBox(width: 12),
-                  Consumer<SavingsChatNotifier>(
-                    builder: (context, notifier, _) {
-                      final isLoading = notifier.isLoading;
-                      return FilledButton.icon(
-                        onPressed: isLoading ? null : () => _submitPrompt(context),
-                        icon: Icon(isLoading ? Icons.hourglass_top : Icons.send),
-                        label: Text(isLoading ? 'Analizzo...' : 'Invia'),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
+                ),
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  onPressed: notifier.isLoading ? null : () => _submitPrompt(context),
+                  icon: Icon(notifier.isLoading ? Icons.hourglass_top : Icons.send),
+                  label: Text(notifier.isLoading ? 'Analizzo...' : 'Invia'),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
