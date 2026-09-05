@@ -15,7 +15,7 @@ class ProductAnalysisModel extends ProductAnalysis {
   });
 
   factory ProductAnalysisModel.fromJson(Map<String, dynamic> json) {
-    final rawCategory = json['category'] ?? json['productCategory'];
+    final rawCategory = json['category'] ?? json['productCategory'] ?? json['categoryKey'];
     final category = _parseCategory(rawCategory);
 
     final rawSpecificAttributes = json['specificAttributes'];
@@ -28,14 +28,26 @@ class ProductAnalysisModel extends ProductAnalysis {
       }
     }
 
+    final primaryUnitName = _normalizePrimaryUnitName(
+      json: json,
+      category: category,
+      specificAttributes: specificAttributes,
+    );
+    final totalUnitsCount = _normalizeTotalUnitsCount(
+      json: json,
+      category: category,
+      specificAttributes: specificAttributes,
+      primaryUnitName: primaryUnitName,
+    );
+
     return ProductAnalysisModel(
       id: (json['id'] ?? json['productId'] ?? _generateIdFromBrand(json)).toString(),
       productName: _stringFromJson(json['productName'] ?? json['name'], fallback: 'Prodotto sconosciuto'),
       brand: _stringFromJson(json['brand'], fallback: 'Brand sconosciuto'),
       category: category,
       totalPrice: _doubleFromJson(json['totalPrice'], fallback: 0),
-      primaryUnitName: _stringFromJson(json['primaryUnitName'] ?? json['unitName'], fallback: 'unità'),
-      totalUnitsCount: _doubleFromJson(json['totalUnitsCount'] ?? json['unitsCount'], fallback: 1),
+      primaryUnitName: primaryUnitName,
+      totalUnitsCount: totalUnitsCount,
       specificAttributes: specificAttributes,
       analysisSummary: json['analysisSummary'] as String?,
     );
@@ -83,6 +95,109 @@ class ProductAnalysisModel extends ProductAnalysis {
       default:
         return ProductCategory.other;
     }
+  }
+
+  static String _normalizePrimaryUnitName({
+    required Map<String, dynamic> json,
+    required ProductCategory category,
+    required Map<String, dynamic> specificAttributes,
+  }) {
+    final rawUnit = (json['primaryUnitName'] ?? json['unitName'] ?? '').toString().trim();
+    final normalizedUnit = rawUnit.isEmpty ? '' : rawUnit.toLowerCase();
+    final productName = (json['productName'] ?? json['name'] ?? '').toString().toLowerCase();
+
+    if (category == ProductCategory.household ||
+        productName.contains('carta') ||
+        productName.contains('igienica')) {
+      return 'strappo';
+    }
+
+    switch (normalizedUnit) {
+      case 'strappo':
+      case 'strappi':
+      case 'stramppi':
+      case 'sheet':
+      case 'sheets':
+        return 'strappo';
+      case 'rotolo':
+      case 'rotoli':
+      case 'rotolii':
+        return 'rotolo';
+      case 'litro':
+      case 'litri':
+      case 'litrii':
+        return 'litro';
+      case 'kg':
+      case 'kilogrammo':
+        return 'kg';
+      case 'capsula':
+      case 'capsule':
+        return 'capsula';
+      case 'lavaggio':
+      case 'lavaggi':
+        return 'lavaggio';
+      case 'fetta':
+      case 'fette':
+        return 'fetta';
+      case 'sacchetto':
+      case 'sacchetti':
+        return 'sacchetto';
+      default:
+        if (specificAttributes.containsKey('sheetsPerRoll') ||
+            specificAttributes.containsKey('sheets_per_roll')) {
+          return 'strappo';
+        }
+        return rawUnit.isEmpty ? 'unità' : rawUnit;
+    }
+  }
+
+  static double _normalizeTotalUnitsCount({
+    required Map<String, dynamic> json,
+    required ProductCategory category,
+    required Map<String, dynamic> specificAttributes,
+    required String primaryUnitName,
+  }) {
+    final explicitCount = _doubleFromJson(
+      json['totalUnitsCount'] ?? json['unitsCount'] ?? json['total_units_count'],
+      fallback: -1,
+    );
+    if (explicitCount > 0) {
+      return explicitCount;
+    }
+
+    final rolls = _doubleFromJson(
+      json['rollsCount'] ?? json['rolls_count'] ?? json['piecesCount'] ?? json['pieces_count'],
+      fallback: 0,
+    );
+    final sheetsPerRoll = _doubleFromJson(
+      json['sheetsPerRoll'] ?? json['sheets_per_roll'] ?? json['strappiPerRotolo'] ?? json['strappi_per_rotolo'],
+      fallback: 0,
+    );
+
+    if (category == ProductCategory.household ||
+        primaryUnitName == 'strappo') {
+      if (rolls > 0 && sheetsPerRoll > 0) {
+        return rolls * sheetsPerRoll;
+      }
+    }
+
+    final totalAttribute = _doubleFromJson(
+      specificAttributes['totalUnitsCount'] ?? specificAttributes['total_units_count'],
+      fallback: 0,
+    );
+    if (totalAttribute > 0) {
+      return totalAttribute;
+    }
+
+    final specificTotal = _doubleFromJson(
+      specificAttributes['totalUnits'] ?? specificAttributes['total_units'],
+      fallback: 0,
+    );
+    if (specificTotal > 0) {
+      return specificTotal;
+    }
+
+    return 1;
   }
 
   static String _stringFromJson(dynamic value, {required String fallback}) {
