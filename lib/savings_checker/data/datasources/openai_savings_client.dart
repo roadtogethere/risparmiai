@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
 class OpenAiSavingsClient {
   OpenAiSavingsClient({
     this.apiKey,
@@ -36,11 +40,44 @@ Regole vincolanti:
 10. Se la categoria non è nota, suggerisci una nuova `category_key` semplice, come `pet_food`, `cleaning_product`, `milk`, `bread`.
 ''';
 
-  Future<List<Map<String, dynamic>>> analyzeShoppingPrompt(String userPrompt) async {
-    if (apiKey == null || apiKey!.trim().isEmpty) {
-      throw StateError('OpenAI API key is required to query the model.');
+  static Map<String, dynamic> parseModelResponse(String rawResponse) {
+    final trimmed = rawResponse.trim();
+    if (trimmed.isEmpty) {
+      throw const FormatException('Empty response from OpenAI.');
     }
 
+    String jsonText = trimmed;
+    final codeFenceMatch = RegExp(r'```(?:json)?\s*(.*?)\s*```', dotAll: true).firstMatch(trimmed);
+    if (codeFenceMatch != null) {
+      jsonText = codeFenceMatch.group(1) ?? trimmed;
+    }
+
+    final decoded = json.decode(jsonText) as Map<String, dynamic>;
+    final requiredKeys = <String>{
+      'category_key',
+      'brand',
+      'total_price',
+      'units_per_package',
+      'primary_unit_name',
+      'specific_attributes',
+    };
+
+    final missingKeys = requiredKeys.difference(decoded.keys.toSet());
+    if (missingKeys.isNotEmpty) {
+      throw FormatException('OpenAI response is missing required fields: ${missingKeys.join(', ')}');
+    }
+
+    final businessFields = <String>{'unitCost', 'savings', 'averageUnitCost', 'comparison'};
+    for (final businessField in businessFields) {
+      if (decoded.containsKey(businessField)) {
+        throw FormatException('OpenAI response included business field: $businessField');
+      }
+    }
+
+    return decoded;
+  }
+
+  Future<List<Map<String, dynamic>>> analyzeShoppingPrompt(String userPrompt) async {
     final extraction = await extractRawProductData(userPrompt);
     return <Map<String, dynamic>>[extraction];
   }
@@ -55,34 +92,33 @@ Regole vincolanti:
       throw StateError('User prompt cannot be empty.');
     }
 
-    final lower = normalized.toLowerCase();
-    final isToiletPaper = lower.contains('carta') && (lower.contains('igienica') || lower.contains('igienic'));
+    final requestBody = buildRequestPayload(normalized);
+    final response = await http.post(
+      Uri.parse('$baseUrl/chat/completions'),
+      headers: <String, String>{
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      },
+      body: json.encode(requestBody),
+    );
 
-    if (isToiletPaper) {
-      return <String, dynamic>{
-        'category_key': 'toilet_paper',
-        'brand': 'Migliore',
-        'total_price': 5.99,
-        'units_per_package': 12,
-        'sub_units_per_package': 500,
-        'primary_unit_name': 'strappo',
-        'specific_attributes': <String, dynamic>{
-          'rolls_count': 12,
-          'sheets_per_roll': 500,
-          'material': 'cellulosa',
-        },
-      };
+    if (response.statusCode != 200) {
+      throw StateError('OpenAI request failed with status ${response.statusCode}: ${response.body}');
     }
 
-    return <String, dynamic>{
-      'category_key': 'custom_category',
-      'brand': 'Brand sconosciuto',
-      'total_price': 0.0,
-      'units_per_package': 1,
-      'sub_units_per_package': null,
-      'primary_unit_name': 'unità',
-      'specific_attributes': <String, dynamic>{},
-    };
+    final responseBody = json.decode(response.body) as Map<String, dynamic>;
+    final choices = responseBody['choices'] as List<dynamic>?;
+    if (choices == null || choices.isEmpty) {
+      throw const FormatException('OpenAI response has no choices.');
+    }
+
+    final message = choices.first['message'] as Map<String, dynamic>?;
+    final content = message?['content'];
+    if (content is! String || content.trim().isEmpty) {
+      throw const FormatException('OpenAI response content is empty.');
+    }
+
+    return parseModelResponse(content);
   }
 
   Map<String, dynamic> buildRequestPayload(String userPrompt) {
