@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'savings_checker/data/repositories/savings_repository_impl.dart';
+import 'savings_checker/presentation/notifiers/savings_chat_notifier.dart';
+import 'savings_checker/presentation/pages/savings_checker_page.dart';
+
 void main() {
   runApp(const MainApp());
 }
@@ -9,12 +13,16 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Text('Hello World!'),
-        ),
+    final notifier = SavingsChatNotifier(
+      repository: SavingsRepositoryImpl(
+        useMockData: true,
       ),
+    );
+
+    return MaterialApp(
+      title: 'Verifica Risparmio',
+      debugShowCheckedModeBanner: false,
+      home: SavingsCheckerPage(notifier: notifier),
     );
   }
 }
