@@ -46,6 +46,16 @@ class SavingsChatNotifier extends ChangeNotifier {
       return;
     }
 
+    final isMeaningfulPrompt = _looksLikeProductPrompt(prompt);
+    if (!isMeaningfulPrompt) {
+      final friendlyMessage = 'Ciao! Inserisci un elemento da valutare e ti aiuterò.';
+      _messages.add(ChatMessage(sender: ChatMessageSender.user, text: prompt, createdAt: DateTime.now()));
+      _messages.add(ChatMessage(sender: ChatMessageSender.assistant, text: friendlyMessage, createdAt: DateTime.now()));
+      _errorMessage = friendlyMessage;
+      notifyListeners();
+      return;
+    }
+
     _messages.add(ChatMessage(sender: ChatMessageSender.user, text: prompt, createdAt: DateTime.now()));
     _errorMessage = null;
     _isLoading = true;
@@ -61,11 +71,14 @@ class SavingsChatNotifier extends ChangeNotifier {
       final summary = _buildAssistantSummary(products);
       _messages.add(ChatMessage(sender: ChatMessageSender.assistant, text: summary, createdAt: DateTime.now()));
     } catch (error) {
-      _errorMessage = error.toString();
+      final friendlyMessage = error.toString().contains('Inserisci un elemento da valutare')
+          ? error.toString().replaceFirst('Bad state: ', '')
+          : 'Ciao! Inserisci un elemento da valutare e ti aiuterò.';
+      _errorMessage = friendlyMessage;
       _messages.add(
         ChatMessage(
           sender: ChatMessageSender.assistant,
-          text: 'Si è verificato un problema durante l’analisi. Riprova con una richiesta più specifica.',
+          text: friendlyMessage,
           createdAt: DateTime.now(),
         ),
       );
@@ -73,6 +86,38 @@ class SavingsChatNotifier extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  bool _looksLikeProductPrompt(String prompt) {
+    if (prompt.isEmpty || prompt.length < 3) {
+      return false;
+    }
+
+    final normalized = prompt.toLowerCase();
+    final genericInputs = <String>{
+      'ciao',
+      'prova',
+      'test',
+      'come stai',
+      'come va',
+      'hi',
+      'hello',
+      'salve',
+      'buongiorno',
+      'buonasera',
+      'ciao come stai',
+      'ok',
+    };
+
+    if (genericInputs.contains(normalized)) {
+      return false;
+    }
+
+    final hasLetters = RegExp(r'[a-zà-ù]').hasMatch(normalized);
+    final hasNumber = RegExp(r'\d').hasMatch(normalized);
+    final hasProductWord = RegExp(r'\b(carta|igienica|detergente|lavastoviglie|pastiglie|pane|latte|sapone|shampoo|acqua|pasta|biscotti|caffè|caffe|rotoli|strappi|kg|litro|ml|euro|\€|prezzo)\b').hasMatch(normalized);
+
+    return hasLetters && (hasNumber || hasProductWord);
   }
 
   String _buildAssistantSummary(List<ProductAnalysis> products) {

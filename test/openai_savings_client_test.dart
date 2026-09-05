@@ -1,8 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:risparmiai/savings_checker/data/datasources/ai_savings_client.dart';
 import 'package:risparmiai/savings_checker/data/datasources/openai_savings_client.dart';
 import 'package:risparmiai/savings_checker/data/models/product_analysis_model.dart';
 import 'package:risparmiai/savings_checker/data/repositories/savings_repository_impl.dart';
 import 'package:risparmiai/savings_checker/presentation/notifiers/savings_chat_notifier.dart';
+
+class _FailingAiClient implements AiSavingsClient {
+  @override
+  Future<Map<String, dynamic>> analyzeProductWithCatalog(String userPrompt, String catalogJson) async {
+    throw StateError('AI should not be called for invalid prompts');
+  }
+}
 
 void main() {
   group('OpenAiSavingsClient', () {
@@ -78,6 +86,18 @@ void main() {
 
       expect(products.any((product) => product.productName.toLowerCase().contains('carta')), isFalse);
       expect(products.any((product) => product.productName.toLowerCase().contains('lavastoviglie') || product.brand.toLowerCase().contains('lavastoviglie')), isTrue);
+    });
+
+    test('rejects vague prompts before calling the AI client', () async {
+      final repository = SavingsRepositoryImpl(
+        useMockData: false,
+        aiClient: _FailingAiClient(),
+      );
+
+      await expectLater(
+        repository.analyzeProducts(userPrompt: 'prova'),
+        throwsA(isA<StateError>()),
+      );
     });
   });
 }

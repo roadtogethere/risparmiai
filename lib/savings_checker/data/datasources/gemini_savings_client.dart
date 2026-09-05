@@ -6,21 +6,39 @@ import 'package:http/http.dart' as http;
 import 'ai_response_parser.dart';
 import 'ai_savings_client.dart';
 
-/// Client per l'API Gemini (Google Generative Language API).
-/// Usa lo stesso system prompt e lo stesso parser/validatore di
-/// [OpenAiSavingsClient], così la logica di business resta identica
-/// indipendentemente dal provider scelto.
+/// Client HTTP per l'integrazione con l'API Gemini di Google Generative AI.
+///
+/// Implementa [AiSavingsClient] garantendo la stessa interfaccia e logica
+/// di parsing utilizzata da altri provider (es. OpenAI).
 class GeminiSavingsClient implements AiSavingsClient {
+  /// Crea un'istanza di [GeminiSavingsClient].
+  ///
+  /// * [apiKey]: Chiave API di Google AI Studio (obbligatoria per le chiamate).
+  /// * [baseUrl]: Endpoint base dell'API (default v1beta).
+  /// * [model]: Identificatore del modello Gemini da invocare.
   GeminiSavingsClient({
     this.apiKey,
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta',
     this.model = 'gemini-3.6-flash',
   });
 
+  /// Chiave API usata per autenticare le richieste su Google AI Studio.
   final String? apiKey;
+
+  /// URL base dell'API Generative Language di Google.
   final String baseUrl;
+
+  /// Il modello Gemini target per la generazione dei contenuti.
   final String model;
 
+  /// Analizza il prompt dell'utente e il catalogo prodotti tramite l'API Gemini.
+  ///
+  /// Processa l'input, invia una richiesta POST HTTP all'endpoint di generazione
+  /// ed estrae la risposta JSON validandola tramite [AiResponseParser].
+  ///
+  /// Lancia un [StateError] se la API key manca, se il prompt è vuoto o non valido,
+  /// oppure se il server risponde con un codice di errore HTTP.
+  /// Lancia un [FormatException] se la struttura della risposta JSON non è valida.
   @override
   Future<Map<String, dynamic>> analyzeProductWithCatalog(
     String userPrompt,
@@ -30,23 +48,33 @@ class GeminiSavingsClient implements AiSavingsClient {
     debugPrint('Gemini client: model=$model, baseUrl=$baseUrl');
     debugPrint('Gemini client: prompt="${userPrompt.trim()}"');
 
+    // Controllo la presenza della chiave API
     if (apiKey == null || apiKey!.trim().isEmpty) {
       debugPrint('Gemini client: API key missing');
       throw StateError('Gemini API key is required to query the model.');
     }
 
+    // Normalizzazione e validazione base del prompt utente
     final normalized = userPrompt.trim();
     if (normalized.isEmpty) {
       debugPrint('Gemini client: empty prompt');
       throw StateError('User prompt cannot be empty.');
     }
 
+    // Filtro euristico per scartare input generici o saluti prima dell'invio HTTP
+    if (!_looksLikeRealProductPrompt(normalized)) {
+      debugPrint('Gemini client: generic prompt rejected before request: "$normalized"');
+      throw StateError('Ciao! Inserisci un elemento da valutare e ti aiuterò.');
+    }
+
+    // Costruzione e preparazione del payload HTTP
     final requestBody = buildRequestPayload(normalized, catalogJson);
     final uri = Uri.parse('$baseUrl/models/$model:generateContent?key=$apiKey');
 
     debugPrint('Gemini client: request URI=$uri');
     debugPrint('Gemini client: request body=${json.encode(requestBody)}');
 
+    // Esecuzione della chiamata API verso Google
     final response = await http.post(
       uri,
       headers: <String, String>{'Content-Type': 'application/json'},
@@ -56,13 +84,15 @@ class GeminiSavingsClient implements AiSavingsClient {
     debugPrint('Gemini client: status=${response.statusCode}');
     debugPrint('Gemini client: raw response=${response.body}');
 
+    // Gestione dei codici di errore HTTP
     if (response.statusCode != 200) {
-      if (response.statusCode == 404) {
-        debugPrint('Gemini client: model "$model" is unavailable for this API version. Try a supported model such as gemini-2.0-flash.');
+      if (response.statusCode == 404 || response.statusCode == 400) {
+        debugPrint('Gemini client: model "$model" is unavailable or rejected by this API version. Try a supported model such as gemini-2.0-flash.');
       }
       throw StateError('Gemini request failed with status ${response.statusCode}: ${response.body}');
     }
 
+    // Parsing della risposta JSON dell'API Gemini
     final responseBody = json.decode(response.body) as Map<String, dynamic>;
     final candidates = responseBody['candidates'] as List<dynamic>?;
     if (candidates == null || candidates.isEmpty) {
@@ -80,9 +110,54 @@ class GeminiSavingsClient implements AiSavingsClient {
       throw const FormatException('Gemini response text is empty.');
     }
 
+    // Conversione del testo restituito dal modello in una mappa strutturata
     return AiResponseParser.parseModelResponse(text);
   }
 
+  /// Verifica euristica per determinare se il testo inserito dall'utente
+  /// descrive un prodotto reale o se è solo un saluto/test generico.
+  ///
+  /// Restituisce `true` se il prompt contiene lettere combinate con numeri
+  /// o parole chiave legate ai prodotti di consumo (es. "latte", "detergente", "euro").
+  bool _looksLikeRealProductPrompt(String prompt) {
+    if (prompt.isEmpty || prompt.length < 3) {
+      return false;
+    }
+
+    final normalized = prompt.toLowerCase();
+    final genericInputs = <String>{
+      'ciao',
+      'prova',
+      'test',
+      'come stai',
+      'come va',
+      'hi',
+      'hello',
+      'salve',
+      'buongiorno',
+      'buonasera',
+      'ciao come stai',
+      'ok',
+    };
+
+    // Scarta saluti ed espressioni di test esplicite
+    if (genericInputs.contains(normalized)) {
+      return false;
+    }
+
+    final hasLetters = RegExp(r'[a-zà-ù]').hasMatch(normalized);
+    final hasNumber = RegExp(r'\d').hasMatch(normalized);
+    final hasProductWord = RegExp(r'\b(carta|igienica|detergente|lavastoviglie|pastiglie|pane|latte|sapone|shampoo|acqua|pasta|biscotti|caffè|caffe|rotoli|strappi|kg|litro|ml|euro|\€|prezzo)\b').hasMatch(normalized);
+
+    return hasLetters && (hasNumber || hasProductWord);
+  }
+
+  /// Costruisce la struttura dati della mappa JSON da inviare nel corpo della richiesta REST a Gemini.
+  ///
+  /// Configura:
+  /// * `system_instruction`: Il prompt di sistema [kSavingsSystemPrompt].
+  /// * `contents`: L'input combinato dell'utente e del catalogo.
+  /// * `generationConfig`: Parametri di generazione (bassa temperatura, output JSON e disattivazione del budget di ragionamento).
   Map<String, dynamic> buildRequestPayload(String userPrompt, String? catalogJson) {
     final userText = buildUserPromptWithCatalog(userPrompt, catalogJson);
 

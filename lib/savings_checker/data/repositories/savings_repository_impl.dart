@@ -32,6 +32,11 @@ class SavingsRepositoryImpl implements SavingsRepository {
   Future<List<ProductAnalysis>> analyzeProducts({
     required String userPrompt,
   }) async {
+    final normalizedPrompt = userPrompt.trim();
+    if (!_looksLikeRealProductPrompt(normalizedPrompt)) {
+      throw StateError('Ciao! Inserisci un elemento da valutare e ti aiuterò.');
+    }
+
     if (useMockData || _aiClient == null) {
       debugPrint('Risparmiai repository: using mock data for prompt "$userPrompt"');
       return _buildMockProductsForPrompt(userPrompt);
@@ -143,6 +148,19 @@ class SavingsRepositoryImpl implements SavingsRepository {
     }
   }
 
+  bool _looksLikeRealProductPrompt(String prompt) {
+    if (prompt.isEmpty || prompt.length < 6) {
+      return false;
+    }
+
+    final lowered = prompt.toLowerCase();
+    final hasLetters = RegExp(r'[a-zà-ù]').hasMatch(lowered);
+    final hasNumber = RegExp(r'\d').hasMatch(lowered);
+    final hasMeaningfulWords = RegExp(r'\b(carta|igienica|detergente|lavastoviglie|pasta|latte|pane|acqua|cibo|biscotti|sapone|shampoo|pastiglie|rotoli|strappi|euro|€|prezzo|kg|litro|ml|gr|g)\b').hasMatch(lowered);
+
+    return hasLetters && (hasNumber || hasMeaningfulWords);
+  }
+
   double _calculateTotalUnits(Map<String, dynamic> payload) {
     final unitsPerPackage = _asDouble(payload['units_per_package'] ?? 1);
     final subUnits = payload['sub_units_per_package'];
@@ -184,11 +202,15 @@ class SavingsRepositoryImpl implements SavingsRepository {
   }
 
   String _buildAnalysisSummary(String primaryUnitName, double totalPrice, double totalUnitsCount, Map<String, dynamic>? categoryInfo) {
-    final benchmarkText = categoryInfo != null && categoryInfo['average_unit_cost'] != null
-        ? 'Benchmark di riferimento: ${_asDouble(categoryInfo['average_unit_cost']).toStringAsFixed(4)} €/ $primaryUnitName'
-        : 'Benchmark non disponibile.';
+    final currentUnitCost = totalUnitsCount > 0 ? totalPrice / totalUnitsCount : 0.0;
 
-    return 'Prezzo totale: €$totalPrice; totale unità: $totalUnitsCount $primaryUnitName. $benchmarkText';
+    if (categoryInfo == null || categoryInfo['average_unit_cost'] == null) {
+      return 'Il prezzo del prodotto indicato è €${currentUnitCost.toStringAsFixed(4)}/$primaryUnitName. Non ho un riferimento in archivio per questa categoria.';
+    }
+
+    final benchmarkUnitCost = _asDouble(categoryInfo['average_unit_cost']);
+    return 'Il prezzo del prodotto indicato è €${currentUnitCost.toStringAsFixed(4)}/$primaryUnitName, '
+        'in archivio vedo che per lo stesso prodotto c\'era un prezzo medio di €${benchmarkUnitCost.toStringAsFixed(4)}/$primaryUnitName.';
   }
 
   List<ProductAnalysis> _buildMockProductsForPrompt(String userPrompt) {
