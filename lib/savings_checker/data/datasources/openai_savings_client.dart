@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class OpenAiSavingsClient {
@@ -161,6 +162,9 @@ Formato richiesto:
       },
       body: json.encode(requestBody),
     );
+
+    debugPrint('OpenAI status=${response.statusCode}');
+    debugPrint('OpenAI raw response=${response.body}');
 
     if (response.statusCode != 200) {
       throw StateError('OpenAI request failed with status ${response.statusCode}: ${response.body}');

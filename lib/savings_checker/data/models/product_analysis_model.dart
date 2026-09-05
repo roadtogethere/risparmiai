@@ -1,5 +1,5 @@
-import 'package:spesai/savings_checker/domain/entities/product_analysis.dart';
-import 'package:spesai/savings_checker/domain/entities/product_category.dart';
+import 'package:risparmiai/savings_checker/domain/entities/product_analysis.dart';
+import 'package:risparmiai/savings_checker/domain/entities/product_category.dart';
 
 class ProductAnalysisModel extends ProductAnalysis {
   const ProductAnalysisModel({

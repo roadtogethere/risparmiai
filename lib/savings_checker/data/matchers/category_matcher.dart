@@ -1,6 +1,6 @@
-import 'package:spesai/savings_checker/data/datasources/category_reference_data_source.dart';
-import 'package:spesai/savings_checker/data/models/category_match_result.dart';
-import 'package:spesai/savings_checker/domain/entities/suggested_category.dart';
+import 'package:risparmiai/savings_checker/data/datasources/category_reference_data_source.dart';
+import 'package:risparmiai/savings_checker/data/models/category_match_result.dart';
+import 'package:risparmiai/savings_checker/domain/entities/suggested_category.dart';
 
 class CategoryMatcher {
   CategoryMatcher({

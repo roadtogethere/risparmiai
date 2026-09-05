@@ -1,4 +1,4 @@
-package com.example.spesai
+package com.example.risparmiai
 
 import io.flutter.embedding.android.FlutterActivity
 

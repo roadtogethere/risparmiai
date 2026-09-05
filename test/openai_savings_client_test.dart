@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:spesai/savings_checker/data/datasources/openai_savings_client.dart';
-import 'package:spesai/savings_checker/data/models/product_analysis_model.dart';
-import 'package:spesai/savings_checker/data/repositories/savings_repository_impl.dart';
-import 'package:spesai/savings_checker/presentation/notifiers/savings_chat_notifier.dart';
+import 'package:risparmiai/savings_checker/data/datasources/openai_savings_client.dart';
+import 'package:risparmiai/savings_checker/data/models/product_analysis_model.dart';
+import 'package:risparmiai/savings_checker/data/repositories/savings_repository_impl.dart';
+import 'package:risparmiai/savings_checker/presentation/notifiers/savings_chat_notifier.dart';
 
 void main() {
   group('OpenAiSavingsClient', () {

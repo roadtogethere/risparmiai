@@ -1,5 +1,5 @@
-import 'package:spesai/savings_checker/domain/entities/category_reference.dart';
-import 'package:spesai/savings_checker/domain/entities/suggested_category.dart';
+import 'package:risparmiai/savings_checker/domain/entities/category_reference.dart';
+import 'package:risparmiai/savings_checker/domain/entities/suggested_category.dart';
 
 class CategoryMatchResult {
   const CategoryMatchResult({

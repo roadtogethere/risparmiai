@@ -1,4 +1,4 @@
-# Overview Architettura del Progetto SpesAI
+# Overview Architettura del Progetto Risparmiai
 
 ## 1. Vision del Progetto & Architettura Generale
 

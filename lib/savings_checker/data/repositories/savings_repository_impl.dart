@@ -2,14 +2,14 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:spesai/savings_checker/data/datasources/category_reference_store.dart';
-import 'package:spesai/savings_checker/data/datasources/openai_savings_client.dart';
-import 'package:spesai/savings_checker/data/models/category_reference_model.dart';
-import 'package:spesai/savings_checker/domain/entities/category_reference.dart';
-import 'package:spesai/savings_checker/domain/entities/product_analysis.dart';
-import 'package:spesai/savings_checker/domain/entities/product_category.dart';
-import 'package:spesai/savings_checker/domain/repositories/savings_repository.dart';
-import 'package:spesai/savings_checker/domain/services/savings_calculator_service.dart';
+import 'package:risparmiai/savings_checker/data/datasources/category_reference_store.dart';
+import 'package:risparmiai/savings_checker/data/datasources/openai_savings_client.dart';
+import 'package:risparmiai/savings_checker/data/models/category_reference_model.dart';
+import 'package:risparmiai/savings_checker/domain/entities/category_reference.dart';
+import 'package:risparmiai/savings_checker/domain/entities/product_analysis.dart';
+import 'package:risparmiai/savings_checker/domain/entities/product_category.dart';
+import 'package:risparmiai/savings_checker/domain/repositories/savings_repository.dart';
+import 'package:risparmiai/savings_checker/domain/services/savings_calculator_service.dart';
 
 class SavingsRepositoryImpl implements SavingsRepository {
   SavingsRepositoryImpl({
@@ -31,11 +31,11 @@ class SavingsRepositoryImpl implements SavingsRepository {
     required String userPrompt,
   }) async {
     if (useMockData || _openAiClient == null) {
-      debugPrint('SpesAI repository: using mock data for prompt "$userPrompt"');
+      debugPrint('Risparmiai repository: using mock data for prompt "$userPrompt"');
       return _buildMockProductsForPrompt(userPrompt);
     }
 
-    debugPrint('SpesAI repository: calling OpenAI for prompt "$userPrompt"');
+    debugPrint('Risparmiai repository: calling OpenAI for prompt "$userPrompt"');
 
     try {
       final normalizedInput = userPrompt.trim();

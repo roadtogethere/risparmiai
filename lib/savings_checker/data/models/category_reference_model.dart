@@ -1,4 +1,4 @@
-import 'package:spesai/savings_checker/domain/entities/category_reference.dart';
+import 'package:risparmiai/savings_checker/domain/entities/category_reference.dart';
 
 class CategoryReferenceModel extends CategoryReference {
   const CategoryReferenceModel({

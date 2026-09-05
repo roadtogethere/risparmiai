@@ -8,7 +8,7 @@ import 'category_reference_data_source.dart';
 class CategoryReferenceStore {
   const CategoryReferenceStore();
 
-  static const String _prefsKey = 'spesai_category_reference_store_v1';
+  static const String _prefsKey = 'risparmiai_category_reference_store_v1';
 
   Future<List<CategoryReferenceModel>> loadCategories() async {
     final prefs = await SharedPreferences.getInstance();
