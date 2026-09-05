@@ -31,8 +31,11 @@ class SavingsRepositoryImpl implements SavingsRepository {
     required String userPrompt,
   }) async {
     if (useMockData || _openAiClient == null) {
+      debugPrint('SpesAI repository: using mock data for prompt "$userPrompt"');
       return _buildMockProductsForPrompt(userPrompt);
     }
+
+    debugPrint('SpesAI repository: calling OpenAI for prompt "$userPrompt"');
 
     try {
       final normalizedInput = userPrompt.trim();
@@ -189,67 +192,91 @@ class SavingsRepositoryImpl implements SavingsRepository {
   List<ProductAnalysis> _buildMockProductsForPrompt(String userPrompt) {
     final normalizedPrompt = userPrompt.toLowerCase();
 
-    final productA = ProductAnalysis(
-      id: 'carta_igienica_1',
-      productName: 'Carta igienica',
-      brand: 'Migliore',
-      category: ProductCategory.household,
-      totalPrice: 5.99,
-      primaryUnitName: 'strappo',
-      totalUnitsCount: 6000,
-      specificAttributes: <String, dynamic>{
-        'rollsCount': 12,
-        'sheetsPerRoll': 500,
-        'material': 'cellulosa',
-      },
-      analysisSummary: 'Prezzo corretto espresso per strappo, con totale di 6000 unità.',
-    );
+    final mockProducts = <ProductAnalysis>{
+      ProductAnalysis(
+        id: 'carta_igienica_1',
+        productName: 'Carta igienica',
+        brand: '',
+        category: ProductCategory.household,
+        totalPrice: 5.99,
+        primaryUnitName: 'strappo',
+        totalUnitsCount: 6000,
+        specificAttributes: <String, dynamic>{
+          'rollsCount': 12,
+          'sheetsPerRoll': 500,
+          'material': 'cellulosa',
+        },
+        analysisSummary: 'Prezzo corretto espresso per strappo, con totale di 6000 unità.',
+      ),
+      ProductAnalysis(
+        id: 'detersivo_1',
+        productName: 'Detersivo liquido',
+        brand: '',
+        category: ProductCategory.household,
+        totalPrice: 5.99,
+        primaryUnitName: 'litro',
+        totalUnitsCount: 2.5,
+        specificAttributes: <String, dynamic>{
+          'liters': 2.5,
+          'washes': 40,
+          'ecoFriendly': true,
+        },
+        analysisSummary: 'Conveniente per litro e resa elevata.',
+      ),
+      ProductAnalysis(
+        id: 'pane_1',
+        productName: 'Pane bianco',
+        brand: '',
+        category: ProductCategory.bakery,
+        totalPrice: 2.1,
+        primaryUnitName: 'kg',
+        totalUnitsCount: 1,
+        specificAttributes: <String, dynamic>{
+          'weightKg': 1.0,
+          'freshnessHours': 12,
+        },
+        analysisSummary: 'Costo medio, ottimo per uso quotidiano.',
+      ),
+      ProductAnalysis(
+        id: 'pastiglie_lavastoviglie_1',
+        productName: 'Pastiglie lavastoviglie',
+        brand: '',
+        category: ProductCategory.household,
+        totalPrice: 14.0,
+        primaryUnitName: 'pastiglia',
+        totalUnitsCount: 106,
+        specificAttributes: <String, dynamic>{
+          'tabs_count': 106,
+          'pack_size': '106',
+          'brand': '',
+        },
+        analysisSummary: 'Mock generico per pastiglie lavastoviglie.',
+      ),
+    }.toList();
 
-    final productB = ProductAnalysis(
-      id: 'detersivo_1',
-      productName: 'Detersivo liquido',
-      brand: 'EcoCare',
-      category: ProductCategory.household,
-      totalPrice: 5.99,
-      primaryUnitName: 'litro',
-      totalUnitsCount: 2.5,
-      specificAttributes: <String, dynamic>{
-        'liters': 2.5,
-        'washes': 40,
-        'ecoFriendly': true,
-      },
-      analysisSummary: 'Conveniente per litro e resa elevata.',
-    );
+    final matched = mockProducts.where((product) {
+      final haystack = '${product.productName} ${product.brand} ${product.primaryUnitName}'.toLowerCase();
+      final promptContains = <String>[
+        'carta', 'igienica', 'detersivo', 'pane', 'pastiglie', 'lavastoviglie', 'capsule', 'milk', 'latte', 'olio', 'spazzatura', 'bag', 'sacchetto'
+      ];
 
-    final productC = ProductAnalysis(
-      id: 'pane_1',
-      productName: 'Pane bianco',
-      brand: 'Forno del Borgo',
-      category: ProductCategory.bakery,
-      totalPrice: 2.1,
-      primaryUnitName: 'kg',
-      totalUnitsCount: 1,
-      specificAttributes: <String, dynamic>{
-        'weightKg': 1.0,
-        'freshnessHours': 12,
-      },
-      analysisSummary: 'Costo medio, ottimo per uso quotidiano.',
-    );
+      for (final keyword in promptContains) {
+        if (normalizedPrompt.contains(keyword) && haystack.contains(keyword)) {
+          return true;
+        }
+      }
 
-    final fallbackProducts = <ProductAnalysis>[productA, productB, productC];
+      if (normalizedPrompt.contains('lavastoviglie') && haystack.contains('lavastoviglie')) {
+        return true;
+      }
 
-    if (normalizedPrompt.contains('carta') || normalizedPrompt.contains('igienica')) {
-      return <ProductAnalysis>[productA];
+      return false;
+    }).toList(growable: false);
+
+    if (matched.isNotEmpty) {
+      return matched;
     }
 
-    if (normalizedPrompt.contains('detersivo')) {
-      return <ProductAnalysis>[productB];
-    }
-
-    if (normalizedPrompt.contains('pane')) {
-      return <ProductAnalysis>[productC];
-    }
-
-    return fallbackProducts;
+    return <ProductAnalysis>[mockProducts.first];
   }
 }

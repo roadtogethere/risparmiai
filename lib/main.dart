@@ -20,9 +20,12 @@ Future<void> main() async {
   final hasOpenAiKey = isDotEnvLoaded &&
       (dotenv.env['OPENAI_API_KEY'] ?? '').trim().isNotEmpty;
 
+  final useMockData = !hasOpenAiKey;
+  debugPrint('SpesAI startup: OPENAI_API_KEY present = $hasOpenAiKey; usingMockData = $useMockData');
+
   runApp(
     MainApp(
-      useMockData: !hasOpenAiKey,
+      useMockData: useMockData,
     ),
   );
 }

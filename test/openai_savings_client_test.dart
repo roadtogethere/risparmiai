@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spesai/savings_checker/data/datasources/openai_savings_client.dart';
 import 'package:spesai/savings_checker/data/models/product_analysis_model.dart';
+import 'package:spesai/savings_checker/data/repositories/savings_repository_impl.dart';
 import 'package:spesai/savings_checker/presentation/notifiers/savings_chat_notifier.dart';
 
 void main() {
@@ -69,6 +70,14 @@ void main() {
       expect(SavingsChatNotifier.formatUnitCost(0.00185), '0.00185');
       expect(SavingsChatNotifier.formatUnitCost(5.99), '5.99');
       expect(SavingsChatNotifier.formatUnitCost(12), '12');
+    });
+
+    test('mock mode does not fall back to paper products for dishwasher prompts', () async {
+      final repository = SavingsRepositoryImpl(useMockData: true);
+      final products = await repository.analyzeProducts(userPrompt: 'Pastiglie lavastoviglie 106 a 14 euro');
+
+      expect(products.any((product) => product.productName.toLowerCase().contains('carta')), isFalse);
+      expect(products.any((product) => product.productName.toLowerCase().contains('lavastoviglie') || product.brand.toLowerCase().contains('lavastoviglie')), isTrue);
     });
   });
 }
