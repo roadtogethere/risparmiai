@@ -7,6 +7,8 @@ class CategoryReferenceModel extends CategoryReference {
     required super.primaryUnit,
     required super.averageUnitCost,
     required super.requiredAttributes,
+    super.sumOfUnitCosts = 0,
+    super.entriesCount = 0,
   });
 
   factory CategoryReferenceModel.fromJson(Map<String, dynamic> json) {
@@ -17,9 +19,27 @@ class CategoryReferenceModel extends CategoryReference {
       averageUnitCost: (json['average_unit_cost'] is num)
           ? (json['average_unit_cost'] as num).toDouble()
           : double.tryParse(json['average_unit_cost']?.toString() ?? '') ?? 0,
+      sumOfUnitCosts: (json['sum_of_unit_costs'] is num)
+          ? (json['sum_of_unit_costs'] as num).toDouble()
+          : double.tryParse(json['sum_of_unit_costs']?.toString() ?? '') ?? 0,
+      entriesCount: (json['entries_count'] is num)
+          ? (json['entries_count'] as num).toInt()
+          : int.tryParse(json['entries_count']?.toString() ?? '') ?? 0,
       requiredAttributes: (json['required_attributes'] is List)
           ? (json['required_attributes'] as List).map((item) => item.toString()).toList(growable: false)
           : const <String>[],
+    );
+  }
+
+  factory CategoryReferenceModel.fromEntity(CategoryReference entity) {
+    return CategoryReferenceModel(
+      key: entity.key,
+      displayName: entity.displayName,
+      primaryUnit: entity.primaryUnit,
+      averageUnitCost: entity.averageUnitCost,
+      requiredAttributes: entity.requiredAttributes,
+      sumOfUnitCosts: entity.sumOfUnitCosts,
+      entriesCount: entity.entriesCount,
     );
   }
 
@@ -29,7 +49,47 @@ class CategoryReferenceModel extends CategoryReference {
       'display_name': displayName,
       'primary_unit': primaryUnit,
       'average_unit_cost': averageUnitCost,
+      'sum_of_unit_costs': sumOfUnitCosts,
+      'entries_count': entriesCount,
       'required_attributes': requiredAttributes,
     };
+  }
+
+  CategoryReferenceModel copyWith({
+    String? key,
+    String? displayName,
+    String? primaryUnit,
+    double? averageUnitCost,
+    double? sumOfUnitCosts,
+    int? entriesCount,
+    List<String>? requiredAttributes,
+  }) {
+    return CategoryReferenceModel(
+      key: key ?? this.key,
+      displayName: displayName ?? this.displayName,
+      primaryUnit: primaryUnit ?? this.primaryUnit,
+      averageUnitCost: averageUnitCost ?? this.averageUnitCost,
+      sumOfUnitCosts: sumOfUnitCosts ?? this.sumOfUnitCosts,
+      entriesCount: entriesCount ?? this.entriesCount,
+      requiredAttributes: requiredAttributes ?? this.requiredAttributes,
+    );
+  }
+
+  /// Registra un nuovo prezzo unitario osservato per questa categoria:
+  /// aggiorna il minimo storico (averageUnitCost, mostrato come "migliore
+  /// convenienza") e accumula somma/conteggio per la media storica.
+  CategoryReferenceModel withNewObservedUnitCost(double unitCost) {
+    if (unitCost <= 0) {
+      return this;
+    }
+
+    final isFirstEntry = entriesCount == 0;
+    final newCheapest = isFirstEntry ? unitCost : (unitCost < averageUnitCost ? unitCost : averageUnitCost);
+
+    return copyWith(
+      averageUnitCost: newCheapest,
+      sumOfUnitCosts: sumOfUnitCosts + unitCost,
+      entriesCount: entriesCount + 1,
+    );
   }
 }

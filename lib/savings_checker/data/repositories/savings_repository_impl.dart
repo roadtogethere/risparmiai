@@ -6,7 +6,6 @@ import 'package:risparmiai/savings_checker/data/datasources/ai_savings_client.da
 import 'package:risparmiai/savings_checker/data/datasources/category_reference_store.dart';
 import 'package:risparmiai/savings_checker/data/datasources/openai_savings_client.dart';
 import 'package:risparmiai/savings_checker/data/models/category_reference_model.dart';
-import 'package:risparmiai/savings_checker/domain/entities/category_reference.dart';
 import 'package:risparmiai/savings_checker/domain/entities/product_analysis.dart';
 import 'package:risparmiai/savings_checker/domain/entities/product_category.dart';
 import 'package:risparmiai/savings_checker/domain/repositories/savings_repository.dart';
@@ -55,22 +54,6 @@ class SavingsRepositoryImpl implements SavingsRepository {
       final productData = parsedPayload['product'] as Map<String, dynamic>? ?? const <String, dynamic>{};
       final categoryMatch = parsedPayload['category_match'] as Map<String, dynamic>? ?? const <String, dynamic>{};
       final matchedCategory = categoryMatch['category'] as Map<String, dynamic>?;
-      final isExactMatch = categoryMatch['is_exact_match'] == true;
-      final needsUpdate = categoryMatch['needs_update'] == true;
-
-      if (matchedCategory != null && (needsUpdate || !isExactMatch)) {
-        final categoryReference = CategoryReferenceModel(
-          key: (matchedCategory['key'] ?? productData['category_key'] ?? '').toString(),
-          displayName: (matchedCategory['display_name'] ?? '').toString(),
-          primaryUnit: (matchedCategory['primary_unit'] ?? productData['primary_unit_name'] ?? '').toString(),
-          averageUnitCost: _asDouble(matchedCategory['average_unit_cost']),
-          requiredAttributes: _readStringList(matchedCategory['required_attributes']),
-        );
-
-        if (categoryReference.key.isNotEmpty) {
-          await _categoryStore.upsertCategory(categoryReference);
-        }
-      }
 
       final categoryKey = (productData['category_key'] ?? matchedCategory?['key'] ?? 'custom_category').toString();
       final totalUnitsCount = _calculateTotalUnits(productData);
@@ -79,6 +62,26 @@ class SavingsRepositoryImpl implements SavingsRepository {
       final primaryUnitName = (productData['primary_unit_name'] ?? matchedCategory?['primary_unit'] ?? 'unità').toString();
       final category = _mapCategoryKeyToEnum(categoryKey);
       final attributes = _normalizeSpecificAttributes(productData['specific_attributes'] as Map<String, dynamic>? ?? const <String, dynamic>{});
+
+      final currentUnitCost = totalUnitsCount > 0 ? totalPrice / totalUnitsCount : 0.0;
+
+      // Aggiorna sempre lo store (cheapest + media) ad ogni analisi valida,
+      // indipendentemente da is_exact_match/needs_update: ogni prezzo
+      // osservato contribuisce alla storia della categoria.
+      CategoryReferenceModel? updatedCategory;
+      if (categoryKey.isNotEmpty && currentUnitCost > 0) {
+        final proposedCategory = CategoryReferenceModel(
+          key: categoryKey,
+          displayName: (matchedCategory?['display_name'] ?? categoryKey).toString(),
+          primaryUnit: primaryUnitName,
+          averageUnitCost: matchedCategory != null ? _asDouble(matchedCategory['average_unit_cost']) : currentUnitCost,
+          requiredAttributes: _readStringList(matchedCategory?['required_attributes']),
+        );
+
+        await _categoryStore.upsertCategoryWithObservedUnitCost(proposedCategory, currentUnitCost);
+        final refreshed = await _categoryStore.loadCustomCategories();
+        updatedCategory = refreshed.where((item) => item.key == categoryKey).cast<CategoryReferenceModel?>().firstOrNull;
+      }
 
       final product = ProductAnalysis(
         id: 'product_${DateTime.now().microsecondsSinceEpoch}',
@@ -89,7 +92,7 @@ class SavingsRepositoryImpl implements SavingsRepository {
         primaryUnitName: primaryUnitName,
         totalUnitsCount: totalUnitsCount,
         specificAttributes: attributes,
-        analysisSummary: _buildAnalysisSummary(primaryUnitName, totalPrice, totalUnitsCount, matchedCategory),
+        analysisSummary: _buildAnalysisSummary(primaryUnitName, currentUnitCost, updatedCategory),
       );
 
       final comparison = _calculator.compareAgainstAverage(
@@ -201,16 +204,23 @@ class SavingsRepositoryImpl implements SavingsRepository {
     return 0;
   }
 
-  String _buildAnalysisSummary(String primaryUnitName, double totalPrice, double totalUnitsCount, Map<String, dynamic>? categoryInfo) {
-    final currentUnitCost = totalUnitsCount > 0 ? totalPrice / totalUnitsCount : 0.0;
-
-    if (categoryInfo == null || categoryInfo['average_unit_cost'] == null) {
-      return 'Il prezzo del prodotto indicato è €${currentUnitCost.toStringAsFixed(4)}/$primaryUnitName. Non ho un riferimento in archivio per questa categoria.';
+  String _buildAnalysisSummary(String primaryUnitName, double currentUnitCost, CategoryReferenceModel? updatedCategory) {
+    if (updatedCategory == null || updatedCategory.entriesCount <= 1) {
+      return 'Il prezzo del prodotto indicato è €${currentUnitCost.toStringAsFixed(4)}/$primaryUnitName. '
+          'Non ho ancora uno storico per questa categoria: sarà il primo riferimento salvato.';
     }
 
-    final benchmarkUnitCost = _asDouble(categoryInfo['average_unit_cost']);
-    return 'Il prezzo del prodotto indicato è €${currentUnitCost.toStringAsFixed(4)}/$primaryUnitName, '
-        'in archivio vedo che per lo stesso prodotto c\'era un prezzo medio di €${benchmarkUnitCost.toStringAsFixed(4)}/$primaryUnitName.';
+    final cheapest = updatedCategory.averageUnitCost;
+    final average = updatedCategory.averageOfAllEntries;
+
+    final isNewRecord = currentUnitCost <= cheapest;
+    final comparisonText = isNewRecord
+        ? 'È il prezzo più conveniente registrato finora per questa categoria.'
+        : 'In archivio il prezzo più conveniente registrato è €${cheapest.toStringAsFixed(4)}/$primaryUnitName.';
+
+    return 'Il prezzo del prodotto indicato è €${currentUnitCost.toStringAsFixed(4)}/$primaryUnitName. '
+        '$comparisonText '
+        'Media storica su ${updatedCategory.entriesCount} rilevazioni: €${average.toStringAsFixed(4)}/$primaryUnitName.';
   }
 
   List<ProductAnalysis> _buildMockProductsForPrompt(String userPrompt) {
@@ -303,4 +313,8 @@ class SavingsRepositoryImpl implements SavingsRepository {
 
     return <ProductAnalysis>[mockProducts.first];
   }
+}
+
+extension _FirstOrNullExtension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

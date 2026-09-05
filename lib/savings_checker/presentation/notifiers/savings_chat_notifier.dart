@@ -125,19 +125,15 @@ class SavingsChatNotifier extends ChangeNotifier {
       return 'Non ho trovato prodotti da confrontare.';
     }
 
-    final bestProduct = products.reduce((best, current) {
-      return current.unitCost < best.unitCost ? current : best;
-    });
-
     final buffer = StringBuffer();
-    buffer.writeln('Ho analizzato ${products.length} prodotto/i.');
-    buffer.writeln('Il miglior prezzo unitario è ${bestProduct.brand} ${bestProduct.productName}: ${formatUnitCost(bestProduct.unitCost)} €/unità.');
-
     for (final product in products) {
-      final cost = product.unitCost;
-      buffer.writeln('- ${product.brand} ${product.productName}: ${formatUnitCost(cost)} €/ ${product.primaryUnitName}');
+      final summary = product.analysisSummary;
+      if (summary != null && summary.trim().isNotEmpty) {
+        buffer.writeln(summary.trim());
+      }
     }
 
-    return buffer.toString();
+    final fallback = buffer.toString().trim();
+    return fallback.isNotEmpty ? fallback : 'Nessun dato disponibile per questo prodotto.';
   }
 }
