@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spesai/savings_checker/data/datasources/openai_savings_client.dart';
+import 'package:spesai/savings_checker/data/models/product_analysis_model.dart';
 
 void main() {
   group('OpenAiSavingsClient', () {
@@ -27,6 +28,25 @@ void main() {
       expect(parsed.containsKey('unitCost'), isFalse);
       expect(parsed.containsKey('savings'), isFalse);
       expect(parsed.containsKey('averageUnitCost'), isFalse);
+    });
+
+    test('does not force strappo for generic household products', () {
+      final parsed = ProductAnalysisModel.fromJson({
+        'id': 'detergent_1',
+        'productName': 'Detersivo per lavatrice',
+        'brand': 'EcoCare',
+        'category': 'household',
+        'totalPrice': 5.99,
+        'primaryUnitName': 'litro',
+        'totalUnitsCount': 2.5,
+        'specificAttributes': {
+          'total_liters': 2.5,
+          'total_washes': 40,
+        },
+      });
+
+      expect(parsed.primaryUnitName, 'litro');
+      expect(parsed.category.name, 'household');
     });
   });
 }

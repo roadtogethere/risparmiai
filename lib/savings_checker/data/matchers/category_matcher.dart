@@ -9,8 +9,35 @@ class CategoryMatcher {
 
   final CategoryReferenceDataSource _dataSource;
 
+  static String normalizeText(String value) {
+    final normalized = value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    final replacements = <String, String>{
+      'stramppi': 'strappi',
+      'rotolii': 'rotoli',
+      'litrii': 'litri',
+      'igienicaa': 'igienica',
+      'igieniciai': 'igienica',
+      'igienicai': 'igienica',
+      'cartaigienica': 'carta igienica',
+      'cartaigienicai': 'carta igienica',
+      'rotoli': 'rotoli',
+    };
+
+    var result = normalized;
+    for (final entry in replacements.entries) {
+      result = result.replaceAll(entry.key, entry.value);
+    }
+
+    return result;
+  }
+
   Future<CategoryMatchResult> match(String userInput) async {
-    final normalizedInput = _normalize(userInput);
+    final normalizedInput = normalizeText(userInput);
     final categories = await _dataSource.loadDefaultCategories();
 
     for (final category in categories) {
@@ -23,7 +50,7 @@ class CategoryMatcher {
 
       final candidates = <String>{
         ...aliases,
-        ...aliases.map(_normalize),
+        ...aliases.map(normalizeText),
       };
 
       if (candidates.any((value) => normalizedInput.contains(value) || value.contains(normalizedInput))) {
@@ -51,33 +78,6 @@ class CategoryMatcher {
       suggestedCategory: suggested,
       normalizedInput: normalizedInput,
     );
-  }
-
-  String _normalize(String value) {
-    final normalized = value
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-
-    final replacements = <String, String>{
-      'stramppi': 'strappi',
-      'rotolii': 'rotoli',
-      'litrii': 'litri',
-      'igienicaa': 'igienica',
-      'igieniciai': 'igienica',
-      'igienicai': 'igienica',
-      'cartaigienica': 'carta igienica',
-      'cartaigienicai': 'carta igienica',
-      'rotoli': 'rotoli',
-    };
-
-    var result = normalized;
-    for (final entry in replacements.entries) {
-      result = result.replaceAll(entry.key, entry.value);
-    }
-
-    return result;
   }
 
   String _suggestCategoryKey(String normalizedInput) {

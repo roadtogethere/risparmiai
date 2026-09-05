@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'package:spesai/savings_checker/data/datasources/category_reference_data_source.dart';
 import 'package:spesai/savings_checker/data/datasources/openai_savings_client.dart';
 import 'package:spesai/savings_checker/data/matchers/category_matcher.dart';
@@ -34,7 +36,10 @@ class SavingsRepositoryImpl implements SavingsRepository {
       final normalizedInput = _normalizeUserPrompt(userPrompt);
       final matchResult = await _matcher.match(normalizedInput);
       final parsedPayload = await _openAiClient.extractRawProductData(normalizedInput);
-      final defaultCategory = matchResult.defaultCategory;
+      final defaultCategory = matchResult.defaultCategory ??
+          (matchResult.suggestedCategory != null
+              ? await _findCategoryFromKey(matchResult.suggestedCategory!.categoryKey)
+              : null);
       final benchmarkCategory = defaultCategory ?? await _findCategoryFromKey(parsedPayload['category_key'] as String?);
 
       final totalUnitsCount = _calculateTotalUnits(parsedPayload);
@@ -67,7 +72,11 @@ class SavingsRepositoryImpl implements SavingsRepository {
       }
 
       return <ProductAnalysis>[product];
-    } on Exception {
+    } on Exception catch (error) {
+      if (kDebugMode) {
+        debugPrint('SavingsRepositoryImpl analyzeProducts error: $error');
+        rethrow;
+      }
       return _buildMockProductsForPrompt(userPrompt);
     }
   }
@@ -84,12 +93,7 @@ class SavingsRepositoryImpl implements SavingsRepository {
   }
 
   String _normalizeUserPrompt(String userPrompt) {
-    final normalized = userPrompt.trim();
-    return normalized
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    return CategoryMatcher.normalizeText(userPrompt);
   }
 
   ProductCategory _mapCategoryKeyToEnum(String categoryKey) {

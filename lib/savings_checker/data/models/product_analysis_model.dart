@@ -105,10 +105,15 @@ class ProductAnalysisModel extends ProductAnalysis {
     final rawUnit = (json['primaryUnitName'] ?? json['unitName'] ?? '').toString().trim();
     final normalizedUnit = rawUnit.isEmpty ? '' : rawUnit.toLowerCase();
     final productName = (json['productName'] ?? json['name'] ?? '').toString().toLowerCase();
+    final hasToiletPaperKeywords = productName.contains('carta') && productName.contains('igienica') ||
+        productName.contains('toilet') && productName.contains('paper') ||
+        productName.contains('igienica');
+    final hasSheetsPerRoll = specificAttributes.containsKey('sheetsPerRoll') ||
+        specificAttributes.containsKey('sheets_per_roll') ||
+        specificAttributes.containsKey('rollsCount') ||
+        specificAttributes.containsKey('rolls_count');
 
-    if (category == ProductCategory.household ||
-        productName.contains('carta') ||
-        productName.contains('igienica')) {
+    if (hasToiletPaperKeywords || (hasSheetsPerRoll && normalizedUnit.isEmpty)) {
       return 'strappo';
     }
 
@@ -174,8 +179,7 @@ class ProductAnalysisModel extends ProductAnalysis {
       fallback: 0,
     );
 
-    if (category == ProductCategory.household ||
-        primaryUnitName == 'strappo') {
+    if (primaryUnitName == 'strappo') {
       if (rolls > 0 && sheetsPerRoll > 0) {
         return rolls * sheetsPerRoll;
       }
