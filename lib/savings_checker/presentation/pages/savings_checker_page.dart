@@ -140,7 +140,7 @@ class _ProductInsightCard extends StatelessWidget {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 6),
-          Text('Costo unitario: ${best.unitCost.toStringAsFixed(2)} €/ ${best.primaryUnitName}'),
+          Text('Costo unitario: ${SavingsChatNotifier.formatUnitCost(best.unitCost)} €/ ${best.primaryUnitName}'),
           const SizedBox(height: 10),
           if (best.specificAttributes.isNotEmpty) ...<Widget>[
             const Divider(),

@@ -9,6 +9,24 @@ class SavingsChatNotifier extends ChangeNotifier {
     required SavingsRepository repository,
   }) : _repository = repository;
 
+  static String formatUnitCost(double value) {
+    if (value.isNaN || value.isInfinite) {
+      return '0';
+    }
+
+    final abs = value.abs();
+    if (abs >= 1) {
+      return value.toStringAsFixed(2).replaceFirst(RegExp(r'\.00$'), '').replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+    }
+
+    if (abs >= 0.01) {
+      return value.toStringAsFixed(4).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+    }
+
+    final trimmed = value.toStringAsFixed(6).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+    return trimmed == '-0' ? '0' : trimmed;
+  }
+
   final SavingsRepository _repository;
 
   final List<ChatMessage> _messages = <ChatMessage>[];
@@ -68,11 +86,11 @@ class SavingsChatNotifier extends ChangeNotifier {
 
     final buffer = StringBuffer();
     buffer.writeln('Ho analizzato ${products.length} prodotto/i.');
-    buffer.writeln('Il miglior prezzo unitario è ${bestProduct.brand} ${bestProduct.productName}: ${bestProduct.unitCost.toStringAsFixed(2)} €/unità.');
+    buffer.writeln('Il miglior prezzo unitario è ${bestProduct.brand} ${bestProduct.productName}: ${formatUnitCost(bestProduct.unitCost)} €/unità.');
 
     for (final product in products) {
       final cost = product.unitCost;
-      buffer.writeln('- ${product.brand} ${product.productName}: ${cost.toStringAsFixed(2)} €/ ${product.primaryUnitName}');
+      buffer.writeln('- ${product.brand} ${product.productName}: ${formatUnitCost(cost)} €/ ${product.primaryUnitName}');
     }
 
     return buffer.toString();

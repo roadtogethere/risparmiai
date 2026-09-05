@@ -12,32 +12,53 @@ class OpenAiSavingsClient {
   final String baseUrl;
 
   static const String systemPrompt = '''
-Sei un classificatore e parser di prodotto di spesa.
+Sei un classificatore e parser di prodotti di spesa.
+
+Ruolo:
+- Estrai dati grezzi dal testo dell'utente.
+- Concorda la categoria del prodotto con il catalogo di riferimento fornito.
+- Non calcolare mai costo unitario, risparmio, medie, benchmark o confronto.
+- Restituisci SOLO un JSON valido con la struttura richiesta.
 
 Regole vincolanti:
-1. Non calcolare mai il costo unitario, il risparmio o il confronto di convenienza.
-2. Estrai SOLO i dati grezzi necessari per un parsing successivo in Dart.
-3. Ritorna un JSON di questo formato ESATTAMENTE:
+1. Non calcolare mai costo unitario, risparmio, medie, benchmark o confronti.
+2. Non includere mai i campi: unitCost, savings, averageUnitCost, comparison nei campi del prodotto.
+3. specific_attributes contiene solo valori verificabili dal testo, mai valori inventati o precalcolati.
+4. Se l'utente fornisce dati specifici (ad esempio sheets_per_roll: 500), non sostituirli mai con valori inventati.
+5. Sii tollerante a refusi comuni: stramppi, rotolii, litrii, igenicaa, ecc.
+6. Se la categoria è "toilet_paper" (o equivalente), primary_unit_name DEVE essere sempre "strappo".
+7. Generalizza in modo aggressivo per prodotti dello stesso tipo di uso quotidiano: prodotti equivalenti vanno nella stessa categoria.
+8. Se non esiste una categoria plausibile, crea una nuova categoria con key semplice in snake_case, ad esempio pet_food, cleaning_product, milk, bread.
+9. I campi di categoria in category_match possono includere average_unit_cost ma non calcoli di business nel prodotto.
+10. Rispondi sempre in JSON valido senza testo extra, senza code fence.
+
+Formato richiesto:
 {
-  "category_key": "toilet_paper",
-  "brand": "Migliore",
-  "total_price": 5.99,
-  "units_per_package": 12,
-  "sub_units_per_package": 500,
-  "primary_unit_name": "strappo",
-  "specific_attributes": {
-    "rolls_count": 12,
-    "sheets_per_roll": 500,
-    "material": "cellulosa"
+  "product": {
+    "category_key": "toilet_paper",
+    "brand": "Migliore",
+    "total_price": 5.99,
+    "units_per_package": 12,
+    "sub_units_per_package": 500,
+    "primary_unit_name": "strappo",
+    "specific_attributes": {
+      "rolls_count": 12,
+      "sheets_per_roll": 500,
+      "material": "cellulosa"
+    }
+  },
+  "category_match": {
+    "is_exact_match": true,
+    "needs_update": false,
+    "category": {
+      "key": "toilet_paper",
+      "display_name": "Carta Igienica",
+      "primary_unit": "strappo",
+      "average_unit_cost": 0.00185,
+      "required_attributes": ["rolls_count", "sheets_per_roll"]
+    }
   }
 }
-4. Se la categoria è carta igienica, `primary_unit_name` DEVE essere sempre "strappo".
-5. Se l'utente indica rotoli e strappi per rotolo, usa `units_per_package` e `sub_units_per_package` e non inventare valori alternativi.
-6. Non usare mai valori fallback inventati come `sheetsPerRoll: 200` se l'utente ha già fornito 500.
-7. Sii tollerante ai refusi: `stramppi`, `rotolii`, `litrii`, `strappi`, `capsule`, `lavaggi`.
-8. `specific_attributes` contiene solo attributi verificabili dal testo e non valori pre-calcolati.
-9. Non includere `unitCost`, `savings`, `averageUnitCost`, `comparison` o altri campi di business.
-10. Se la categoria non è nota, suggerisci una nuova `category_key` semplice, come `pet_food`, `cleaning_product`, `milk`, `bread`.
 ''';
 
   static Map<String, dynamic> parseModelResponse(String rawResponse) {
@@ -52,8 +73,33 @@ Regole vincolanti:
       jsonText = codeFenceMatch.group(1) ?? trimmed;
     }
 
-    final decoded = json.decode(jsonText) as Map<String, dynamic>;
-    final requiredKeys = <String>{
+    final decoded = json.decode(jsonText);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('OpenAI response is not a JSON object.');
+    }
+
+    final product = decoded['product'];
+    final categoryMatch = decoded['category_match'];
+
+    if (product is! Map) {
+      throw const FormatException('OpenAI response is missing the product object.');
+    }
+
+    if (categoryMatch is! Map) {
+      throw const FormatException('OpenAI response is missing the category_match object.');
+    }
+
+    final productMap = Map<String, dynamic>.from(product as Map<dynamic, dynamic>);
+    final categoryMatchMap = Map<String, dynamic>.from(categoryMatch as Map<dynamic, dynamic>);
+    final categoryInfo = categoryMatchMap['category'];
+
+    if (categoryInfo is! Map) {
+      throw const FormatException('OpenAI response is missing category_match.category.');
+    }
+
+    final categoryMap = Map<String, dynamic>.from(categoryInfo as Map<dynamic, dynamic>);
+
+    final requiredProductKeys = <String>{
       'category_key',
       'brand',
       'total_price',
@@ -61,20 +107,34 @@ Regole vincolanti:
       'primary_unit_name',
       'specific_attributes',
     };
-
-    final missingKeys = requiredKeys.difference(decoded.keys.toSet());
-    if (missingKeys.isNotEmpty) {
-      throw FormatException('OpenAI response is missing required fields: ${missingKeys.join(', ')}');
+    final missingProductKeys = requiredProductKeys.difference(productMap.keys.toSet());
+    if (missingProductKeys.isNotEmpty) {
+      throw FormatException('OpenAI response is missing required product fields: ${missingProductKeys.join(', ')}');
     }
 
     final businessFields = <String>{'unitCost', 'savings', 'averageUnitCost', 'comparison'};
     for (final businessField in businessFields) {
-      if (decoded.containsKey(businessField)) {
+      if (productMap.containsKey(businessField)) {
         throw FormatException('OpenAI response included business field: $businessField');
       }
     }
 
-    return decoded;
+    final categoryKey = (productMap['category_key'] ?? categoryMap['key'] ?? '').toString();
+    if (categoryKey == 'toilet_paper' || categoryMap['key'] == 'toilet_paper') {
+      productMap['primary_unit_name'] = 'strappo';
+      categoryMap['primary_unit'] = 'strappo';
+      categoryMap['key'] = 'toilet_paper';
+    }
+
+    categoryMatchMap['category'] = categoryMap;
+    productMap['category_key'] = categoryKey.isEmpty ? (categoryMap['key'] ?? '').toString() : categoryKey;
+
+    final normalized = <String, dynamic>{
+      'product': productMap,
+      'category_match': categoryMatchMap,
+    };
+
+    return normalized;
   }
 
   Future<List<Map<String, dynamic>>> analyzeShoppingPrompt(String userPrompt) async {
@@ -82,7 +142,7 @@ Regole vincolanti:
     return <Map<String, dynamic>>[extraction];
   }
 
-  Future<Map<String, dynamic>> extractRawProductData(String userPrompt) async {
+  Future<Map<String, dynamic>> analyzeProductWithCatalog(String userPrompt, String catalogJson) async {
     if (apiKey == null || apiKey!.trim().isEmpty) {
       throw StateError('OpenAI API key is required to query the model.');
     }
@@ -92,7 +152,7 @@ Regole vincolanti:
       throw StateError('User prompt cannot be empty.');
     }
 
-    final requestBody = buildRequestPayload(normalized);
+    final requestBody = buildRequestPayload(normalized, catalogJson);
     final response = await http.post(
       Uri.parse('$baseUrl/chat/completions'),
       headers: <String, String>{
@@ -121,12 +181,23 @@ Regole vincolanti:
     return parseModelResponse(content);
   }
 
-  Map<String, dynamic> buildRequestPayload(String userPrompt) {
+  Future<Map<String, dynamic>> extractRawProductData(String userPrompt, [String? catalogJson]) async {
+    final safeCatalogJson = (catalogJson != null && catalogJson.trim().isNotEmpty)
+        ? catalogJson
+        : jsonEncode(<String, dynamic>{'categories': <Map<String, dynamic>>[]});
+    return analyzeProductWithCatalog(userPrompt, safeCatalogJson);
+  }
+
+  Map<String, dynamic> buildRequestPayload(String userPrompt, [String? catalogJson]) {
+    final catalogText = (catalogJson != null && catalogJson.trim().isNotEmpty)
+        ? '\nCatalogo di riferimento JSON:\n$catalogJson'
+        : '';
+
     return <String, dynamic>{
       'model': 'gpt-4o-mini',
       'messages': <Map<String, String>>[
         <String, String>{'role': 'system', 'content': systemPrompt},
-        <String, String>{'role': 'user', 'content': userPrompt},
+        <String, String>{'role': 'user', 'content': 'PROMPT UTENTE:\n$userPrompt$catalogText'},
       ],
       'temperature': 0.1,
     };

@@ -1,8 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
-import 'package:spesai/savings_checker/data/datasources/category_reference_data_source.dart';
+import 'package:spesai/savings_checker/data/datasources/category_reference_store.dart';
 import 'package:spesai/savings_checker/data/datasources/openai_savings_client.dart';
-import 'package:spesai/savings_checker/data/matchers/category_matcher.dart';
+import 'package:spesai/savings_checker/data/models/category_reference_model.dart';
 import 'package:spesai/savings_checker/domain/entities/category_reference.dart';
 import 'package:spesai/savings_checker/domain/entities/product_analysis.dart';
 import 'package:spesai/savings_checker/domain/entities/product_category.dart';
@@ -13,15 +15,15 @@ class SavingsRepositoryImpl implements SavingsRepository {
   SavingsRepositoryImpl({
     OpenAiSavingsClient? openAiClient,
     SavingsCalculatorService? calculator,
-    CategoryMatcher? categoryMatcher,
+    CategoryReferenceStore? categoryStore,
     this.useMockData = false,
   })  : _openAiClient = openAiClient,
         _calculator = calculator ?? const SavingsCalculatorService(),
-        _matcher = categoryMatcher ?? CategoryMatcher();
+        _categoryStore = categoryStore ?? const CategoryReferenceStore();
 
   final OpenAiSavingsClient? _openAiClient;
   final SavingsCalculatorService _calculator;
-  final CategoryMatcher _matcher;
+  final CategoryReferenceStore _categoryStore;
   final bool useMockData;
 
   @override
@@ -33,22 +35,40 @@ class SavingsRepositoryImpl implements SavingsRepository {
     }
 
     try {
-      final normalizedInput = _normalizeUserPrompt(userPrompt);
-      final matchResult = await _matcher.match(normalizedInput);
-      final parsedPayload = await _openAiClient.extractRawProductData(normalizedInput);
-      final defaultCategory = matchResult.defaultCategory ??
-          (matchResult.suggestedCategory != null
-              ? await _findCategoryFromKey(matchResult.suggestedCategory!.categoryKey)
-              : null);
-      final benchmarkCategory = defaultCategory ?? await _findCategoryFromKey(parsedPayload['category_key'] as String?);
+      final normalizedInput = userPrompt.trim();
+      final categories = await _categoryStore.loadCategories();
+      final catalogJson = jsonEncode(<String, dynamic>{
+        'categories': categories.map((category) => category.toJson()).toList(growable: false),
+      });
 
-      final totalUnitsCount = _calculateTotalUnits(parsedPayload);
-      final totalPrice = _asDouble(parsedPayload['total_price']);
-      final brand = (parsedPayload['brand'] ?? 'Brand sconosciuto').toString();
-      final primaryUnitName = (parsedPayload['primary_unit_name'] ?? benchmarkCategory?.primaryUnit ?? 'unità').toString();
-      final category = _mapCategoryKeyToEnum(
-        benchmarkCategory?.key ?? (parsedPayload['category_key'] ?? 'custom_category').toString(),
-      );
+      final parsedPayload = await _openAiClient.analyzeProductWithCatalog(normalizedInput, catalogJson);
+      final productData = parsedPayload['product'] as Map<String, dynamic>? ?? const <String, dynamic>{};
+      final categoryMatch = parsedPayload['category_match'] as Map<String, dynamic>? ?? const <String, dynamic>{};
+      final matchedCategory = categoryMatch['category'] as Map<String, dynamic>?;
+      final isExactMatch = categoryMatch['is_exact_match'] == true;
+      final needsUpdate = categoryMatch['needs_update'] == true;
+
+      if (matchedCategory != null && (needsUpdate || !isExactMatch)) {
+        final categoryReference = CategoryReferenceModel(
+          key: (matchedCategory['key'] ?? productData['category_key'] ?? '').toString(),
+          displayName: (matchedCategory['display_name'] ?? '').toString(),
+          primaryUnit: (matchedCategory['primary_unit'] ?? productData['primary_unit_name'] ?? '').toString(),
+          averageUnitCost: _asDouble(matchedCategory['average_unit_cost']),
+          requiredAttributes: _readStringList(matchedCategory['required_attributes']),
+        );
+
+        if (categoryReference.key.isNotEmpty) {
+          await _categoryStore.upsertCategory(categoryReference);
+        }
+      }
+
+      final categoryKey = (productData['category_key'] ?? matchedCategory?['key'] ?? 'custom_category').toString();
+      final totalUnitsCount = _calculateTotalUnits(productData);
+      final totalPrice = _asDouble(productData['total_price']);
+      final brand = (productData['brand'] ?? 'Brand sconosciuto').toString();
+      final primaryUnitName = (productData['primary_unit_name'] ?? matchedCategory?['primary_unit'] ?? 'unità').toString();
+      final category = _mapCategoryKeyToEnum(categoryKey);
+      final attributes = _normalizeSpecificAttributes(productData['specific_attributes'] as Map<String, dynamic>? ?? const <String, dynamic>{});
 
       final product = ProductAnalysis(
         id: 'product_${DateTime.now().microsecondsSinceEpoch}',
@@ -58,20 +78,16 @@ class SavingsRepositoryImpl implements SavingsRepository {
         totalPrice: totalPrice,
         primaryUnitName: primaryUnitName,
         totalUnitsCount: totalUnitsCount,
-        specificAttributes: _normalizeSpecificAttributes(parsedPayload['specific_attributes'] as Map<String, dynamic>? ?? const <String, dynamic>{}),
-        analysisSummary: _buildAnalysisSummary(primaryUnitName, totalPrice, totalUnitsCount, benchmarkCategory),
+        specificAttributes: attributes,
+        analysisSummary: _buildAnalysisSummary(primaryUnitName, totalPrice, totalUnitsCount, matchedCategory),
       );
 
-      if (benchmarkCategory != null) {
-        final comparison = _calculator.compareAgainstAverage(
-          product: product,
-          products: <ProductAnalysis>[product],
-        );
+      final comparison = _calculator.compareAgainstAverage(
+        product: product,
+        products: <ProductAnalysis>[product],
+      );
 
-        return <ProductAnalysis>[product.copyWith(analysisSummary: comparison.message)];
-      }
-
-      return <ProductAnalysis>[product];
+      return <ProductAnalysis>[product.copyWith(analysisSummary: comparison.message)];
     } on Exception catch (error) {
       if (kDebugMode) {
         debugPrint('SavingsRepositoryImpl analyzeProducts error: $error');
@@ -90,10 +106,6 @@ class SavingsRepositoryImpl implements SavingsRepository {
     final comparison = _calculator.bestValueProduct(products: allProducts);
 
     return comparison;
-  }
-
-  String _normalizeUserPrompt(String userPrompt) {
-    return CategoryMatcher.normalizeText(userPrompt);
   }
 
   ProductCategory _mapCategoryKeyToEnum(String categoryKey) {
@@ -126,21 +138,6 @@ class SavingsRepositoryImpl implements SavingsRepository {
     }
   }
 
-  Future<CategoryReference?> _findCategoryFromKey(String? categoryKey) async {
-    if (categoryKey == null || categoryKey.isEmpty) {
-      return null;
-    }
-
-    final items = await const CategoryReferenceDataSource().loadDefaultCategories();
-    for (final category in items) {
-      if (category.key == categoryKey) {
-        return category;
-      }
-    }
-
-    return null;
-  }
-
   double _calculateTotalUnits(Map<String, dynamic> payload) {
     final unitsPerPackage = _asDouble(payload['units_per_package'] ?? 1);
     final subUnits = payload['sub_units_per_package'];
@@ -160,6 +157,17 @@ class SavingsRepositoryImpl implements SavingsRepository {
     return normalized;
   }
 
+  List<String> _readStringList(dynamic value) {
+    if (value is! List) {
+      return const <String>[];
+    }
+
+    return value
+        .map((entry) => entry.toString())
+        .where((entry) => entry.trim().isNotEmpty)
+        .toList(growable: false);
+  }
+
   double _asDouble(dynamic value) {
     if (value is num) {
       return value.toDouble();
@@ -170,16 +178,16 @@ class SavingsRepositoryImpl implements SavingsRepository {
     return 0;
   }
 
-  String _buildAnalysisSummary(String primaryUnitName, double totalPrice, double totalUnitsCount, CategoryReference? benchmarkCategory) {
-    final benchmarkText = benchmarkCategory == null
-        ? 'Benchmark non disponibile.'
-        : 'Benchmark di riferimento: ${benchmarkCategory.averageUnitCost.toStringAsFixed(4)} €/ $primaryUnitName';
+  String _buildAnalysisSummary(String primaryUnitName, double totalPrice, double totalUnitsCount, Map<String, dynamic>? categoryInfo) {
+    final benchmarkText = categoryInfo != null && categoryInfo['average_unit_cost'] != null
+        ? 'Benchmark di riferimento: ${_asDouble(categoryInfo['average_unit_cost']).toStringAsFixed(4)} €/ $primaryUnitName'
+        : 'Benchmark non disponibile.';
 
     return 'Prezzo totale: €$totalPrice; totale unità: $totalUnitsCount $primaryUnitName. $benchmarkText';
   }
 
   List<ProductAnalysis> _buildMockProductsForPrompt(String userPrompt) {
-    final normalizedPrompt = _normalizeUserPrompt(userPrompt);
+    final normalizedPrompt = userPrompt.toLowerCase();
 
     final productA = ProductAnalysis(
       id: 'carta_igienica_1',
