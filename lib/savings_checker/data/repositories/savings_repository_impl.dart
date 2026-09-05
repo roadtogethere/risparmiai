@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:risparmiai/savings_checker/data/datasources/ai_savings_client.dart';
 import 'package:risparmiai/savings_checker/data/datasources/category_reference_store.dart';
 import 'package:risparmiai/savings_checker/data/datasources/openai_savings_client.dart';
 import 'package:risparmiai/savings_checker/data/models/category_reference_model.dart';
@@ -13,15 +14,16 @@ import 'package:risparmiai/savings_checker/domain/services/savings_calculator_se
 
 class SavingsRepositoryImpl implements SavingsRepository {
   SavingsRepositoryImpl({
+    AiSavingsClient? aiClient,
     OpenAiSavingsClient? openAiClient,
     SavingsCalculatorService? calculator,
     CategoryReferenceStore? categoryStore,
     this.useMockData = false,
-  })  : _openAiClient = openAiClient,
+  })  : _aiClient = aiClient ?? openAiClient,
         _calculator = calculator ?? const SavingsCalculatorService(),
         _categoryStore = categoryStore ?? const CategoryReferenceStore();
 
-  final OpenAiSavingsClient? _openAiClient;
+  final AiSavingsClient? _aiClient;
   final SavingsCalculatorService _calculator;
   final CategoryReferenceStore _categoryStore;
   final bool useMockData;
@@ -30,12 +32,12 @@ class SavingsRepositoryImpl implements SavingsRepository {
   Future<List<ProductAnalysis>> analyzeProducts({
     required String userPrompt,
   }) async {
-    if (useMockData || _openAiClient == null) {
+    if (useMockData || _aiClient == null) {
       debugPrint('Risparmiai repository: using mock data for prompt "$userPrompt"');
       return _buildMockProductsForPrompt(userPrompt);
     }
 
-    debugPrint('Risparmiai repository: calling OpenAI for prompt "$userPrompt"');
+    debugPrint('Risparmiai repository: calling AI provider for prompt "$userPrompt"');
 
     try {
       final normalizedInput = userPrompt.trim();
@@ -44,7 +46,7 @@ class SavingsRepositoryImpl implements SavingsRepository {
         'categories': categories.map((category) => category.toJson()).toList(growable: false),
       });
 
-      final parsedPayload = await _openAiClient.analyzeProductWithCatalog(normalizedInput, catalogJson);
+      final parsedPayload = await _aiClient.analyzeProductWithCatalog(normalizedInput, catalogJson);
       final productData = parsedPayload['product'] as Map<String, dynamic>? ?? const <String, dynamic>{};
       final categoryMatch = parsedPayload['category_match'] as Map<String, dynamic>? ?? const <String, dynamic>{};
       final matchedCategory = categoryMatch['category'] as Map<String, dynamic>?;
