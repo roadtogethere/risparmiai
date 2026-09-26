@@ -95,12 +95,7 @@ class SavingsRepositoryImpl implements SavingsRepository {
         analysisSummary: _buildAnalysisSummary(primaryUnitName, currentUnitCost, updatedCategory),
       );
 
-      final comparison = _calculator.compareAgainstAverage(
-        product: product,
-        products: <ProductAnalysis>[product],
-      );
-
-      return <ProductAnalysis>[product.copyWith(analysisSummary: comparison.message)];
+      return <ProductAnalysis>[product];
     } on Exception catch (error) {
       if (kDebugMode) {
         debugPrint('SavingsRepositoryImpl analyzeProducts error: $error');

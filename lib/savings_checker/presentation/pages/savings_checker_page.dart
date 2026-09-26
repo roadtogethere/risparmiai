@@ -6,6 +6,8 @@ import '../models/chat_message.dart';
 import '../notifiers/savings_chat_notifier.dart';
 import 'archive_page.dart';
 
+/// Pagina principale per la verifica del risparmio sui prodotti.
+/// Utilizza un [StatefulWidget] per gestire il controller del campo di testo locale.
 class SavingsCheckerPage extends StatefulWidget {
   const SavingsCheckerPage({super.key});
 
@@ -14,16 +16,19 @@ class SavingsCheckerPage extends StatefulWidget {
 }
 
 class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
+  // Controller per gestire l'input di testo dell'utente
   final TextEditingController _controller = TextEditingController();
 
   @override
   void dispose() {
+    // Rilascio delle risorse del controller per evitare memory leak
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Ascolta i cambiamenti in SavingsChatNotifier e ri-esegue il build all'aggiornamento
     final notifier = context.watch<SavingsChatNotifier>();
     final theme = Theme.of(context);
 
@@ -42,6 +47,7 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
         ),
         centerTitle: true,
         actions: <Widget>[
+          // Pulsante per navigare alla schermata dell'Archivio
           IconButton(
             icon: const Icon(Icons.inventory_2_outlined, color: Color(0xFF495057)),
             tooltip: 'Archivio',
@@ -56,22 +62,26 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
       body: SafeArea(
         child: Column(
           children: <Widget>[
-            // Lista Messaggi
+            // --- SEZIONE 1: Cronologia della Chat ---
             Expanded(
               child: ListView.builder(
+                // Inverte l'ordine della lista: utile per le chat dove i nuovi messaggi compaiono in basso
                 reverse: true,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 itemCount: notifier.messages.length,
                 itemBuilder: (context, index) {
+                  // Inverte l'indice per mostrare il messaggio più recente in fondo alla vista
                   final message = notifier.messages[notifier.messages.length - 1 - index];
                   final isUser = message.sender == ChatMessageSender.user;
 
                   return Align(
+                    // Allinea i messaggi dell'utente a destra e quelli del bot a sinistra
                     alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       constraints: BoxConstraints(
+                        // Limita la larghezza massima del bubble al 78% dello schermo
                         maxWidth: MediaQuery.of(context).size.width * 0.78,
                       ),
                       decoration: BoxDecoration(
@@ -79,6 +89,7 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
                         borderRadius: BorderRadius.only(
                           topLeft: const Radius.circular(16),
                           topRight: const Radius.circular(16),
+                          // Smussa tre angoli e ne lascia uno più stretto per creare l'effetto "fumetto"
                           bottomLeft: Radius.circular(isUser ? 16 : 4),
                           bottomRight: Radius.circular(isUser ? 4 : 16),
                         ),
@@ -104,14 +115,15 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
               ),
             ),
 
-            // Card Insight Risparmio (se presente)
+            // --- SEZIONE 2: Card di Analisi (Rendering Condizionale) ---
+            // Mostra la scheda del miglior prodotto solo se ci sono prodotti analizzati
             if (notifier.analyzedProducts.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: _ProductInsightCard(products: notifier.analyzedProducts),
               ),
 
-            // Campo di input inferiore
+            // --- SEZIONE 3: Area di Input Testo ---
             Container(
               padding: const EdgeInsets.all(12),
               decoration: const BoxDecoration(
@@ -122,6 +134,7 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
               ),
               child: Row(
                 children: <Widget>[
+                  // Campo di testo per l'inserimento del prompt
                   Expanded(
                     child: TextField(
                       controller: _controller,
@@ -137,19 +150,24 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
                           borderSide: BorderSide.none,
                         ),
                       ),
+                      // Invio del messaggio tramite tastiera mobile
                       onSubmitted: (_) => _submitPrompt(context),
                     ),
                   ),
                   const SizedBox(width: 8),
+                  
+                  // Pulsante Invio / Indicatore di caricamento
                   Material(
                     color: const Color(0xFF0F62FE),
                     borderRadius: BorderRadius.circular(24),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(24),
+                      // Disabilita il click se il notifier è in stato di caricamento
                       onTap: notifier.isLoading ? null : () => _submitPrompt(context),
                       child: Padding(
                         padding: const EdgeInsets.all(12),
                         child: notifier.isLoading
+                            // Spinner di caricamento se la richiesta è in corso
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
@@ -158,6 +176,7 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
                                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                 ),
                               )
+                            // Icona invio standard
                             : const Icon(
                                 Icons.send_rounded,
                                 color: Colors.white,
@@ -175,15 +194,18 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
     );
   }
 
+  /// Invia il prompt inserito al [SavingsChatNotifier] e pulisce il campo di testo
   Future<void> _submitPrompt(BuildContext context) async {
     final prompt = _controller.text;
     if (prompt.trim().isEmpty) return;
 
     _controller.clear();
+    // Invia il prompt al notifier senza bloccare l'interfaccia principale
     await context.read<SavingsChatNotifier>().analyzeShoppingPrompt(prompt);
   }
 }
 
+/// Componente per mostrare il prodotto con la migliore convenienza economica
 class _ProductInsightCard extends StatelessWidget {
   const _ProductInsightCard({required this.products});
 
@@ -191,6 +213,7 @@ class _ProductInsightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Algoritmo di riduzione per individuare il prodotto con il costo unitario più basso
     final best = products.reduce((currentBest, candidate) {
       return candidate.unitCost < currentBest.unitCost ? candidate : currentBest;
     });
@@ -215,7 +238,7 @@ class _ProductInsightCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          // Badge "Migliore Convenienza"
+          // Badge: "Migliore Convenienza"
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -244,6 +267,8 @@ class _ProductInsightCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+          
+          // Nome del prodotto vincitore e marca
           Text(
             '${best.brand} ${best.productName}',
             style: theme.textTheme.titleMedium?.copyWith(
@@ -252,6 +277,8 @@ class _ProductInsightCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
+
+          // Prezzo unitario formattato
           RichText(
             text: TextSpan(
               style: const TextStyle(color: Color(0xFF495057), fontSize: 14),
@@ -266,7 +293,7 @@ class _ProductInsightCard extends StatelessWidget {
             ),
           ),
 
-          // Attributi Specifici (Chip Style)
+          // Sezione Chip: Attributi specifici del prodotto (se presenti)
           if (best.specificAttributes.isNotEmpty) ...<Widget>[
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 10),
@@ -275,6 +302,7 @@ class _ProductInsightCard extends StatelessWidget {
             Wrap(
               spacing: 8,
               runSpacing: 6,
+              // Mappatura dinamica della Map<String, String> degli attributi in Chip
               children: best.specificAttributes.entries.map((entry) {
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
