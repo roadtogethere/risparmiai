@@ -245,6 +245,55 @@ void main() {
     },
   );
 
+  test(
+    'new water schema with zero required attributes is valid and persists',
+    () async {
+      store = CategoryReferenceStore(defaultDataSource: Defaults([]));
+      const water = CategoryReferenceModel(
+        key: 'water',
+        displayName: 'Acqua',
+        canonicalMetric: 'liter',
+        primaryUnit: 'litro',
+        requiredAttributes: [],
+        averageUnitCost: 0,
+      );
+      expect(
+        () => water.validateSchema(requireCanonicalMetric: true),
+        returnsNormally,
+      );
+      final data = AiResponseParser.parseModelResponse(
+        jsonEncode({
+          'product': {
+            'category_key': 'water',
+            'canonical_metric': 'liter',
+            'primary_unit_name': 'litro',
+            'brand': 'Marca',
+            'total_price': 0.75,
+            'units_per_package': 1.5,
+            'specific_attributes': <String, dynamic>{},
+          },
+          'category_match': {'category': water.toJson()},
+        }),
+      );
+      final product = (await repository(
+        data,
+      ).analyzeProducts(userPrompt: 'Acqua 1,5 litri a 0,75 euro')).single;
+      expect(product.categoryKey, 'water');
+      expect(product.canonicalMetric, 'liter');
+      expect(product.unitCost, 0.5);
+      final persisted = (jsonDecode((await raw())!) as List).single;
+      expect(persisted['required_attributes'], isEmpty);
+      final reloaded = CategoryReferenceStore(defaultDataSource: Defaults([]));
+      final saved = (await reloaded.loadCategories()).single;
+      expect(saved.key, 'water');
+      expect(saved.canonicalMetric, 'liter');
+      expect(saved.primaryUnit, 'litro');
+      expect(saved.requiredAttributes, isEmpty);
+      expect(saved.entriesCount, 1);
+      expect(saved.averageUnitCost, 0.5);
+    },
+  );
+
   for (final field in [
     'canonical_metric',
     'primary_unit',
