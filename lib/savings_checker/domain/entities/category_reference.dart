@@ -1,3 +1,5 @@
+import 'required_attribute.dart';
+
 class CategoryReference {
   const CategoryReference({
     required this.key,
@@ -24,7 +26,7 @@ class CategoryReference {
   /// Numero di volte in cui questa categoria è stata aggiornata con un nuovo prezzo.
   final int entriesCount;
 
-  final List<String> requiredAttributes;
+  final List<RequiredAttribute> requiredAttributes;
 
   /// Media di tutti i prezzi unitari visti finora per questa categoria.
   /// Ricade sul prezzo più economico se non ci sono ancora dati storici.
@@ -47,8 +49,8 @@ class CategoryReference {
           ? (json['entries_count'] as num).toInt()
           : int.tryParse(json['entries_count']?.toString() ?? '') ?? 0,
       requiredAttributes: rawRequiredAttributes is List
-          ? rawRequiredAttributes.map((value) => value.toString()).toList(growable: false)
-          : const <String>[],
+          ? rawRequiredAttributes.map(RequiredAttribute.fromJson).toList(growable: false)
+          : const <RequiredAttribute>[],
     );
   }
 }

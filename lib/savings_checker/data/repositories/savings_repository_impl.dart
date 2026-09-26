@@ -8,6 +8,7 @@ import 'package:risparmiai/savings_checker/data/datasources/openai_savings_clien
 import 'package:risparmiai/savings_checker/data/models/category_reference_model.dart';
 import 'package:risparmiai/savings_checker/domain/entities/product_analysis.dart';
 import 'package:risparmiai/savings_checker/domain/entities/product_category.dart';
+import 'package:risparmiai/savings_checker/domain/entities/required_attribute.dart';
 import 'package:risparmiai/savings_checker/domain/repositories/savings_repository.dart';
 import 'package:risparmiai/savings_checker/domain/services/savings_calculator_service.dart';
 
@@ -75,7 +76,7 @@ class SavingsRepositoryImpl implements SavingsRepository {
           displayName: (matchedCategory?['display_name'] ?? categoryKey).toString(),
           primaryUnit: primaryUnitName,
           averageUnitCost: matchedCategory != null ? _asDouble(matchedCategory['average_unit_cost']) : currentUnitCost,
-          requiredAttributes: _readStringList(matchedCategory?['required_attributes']),
+          requiredAttributes: _readRequiredAttributes(matchedCategory?['required_attributes']),
         );
 
         await _categoryStore.upsertCategoryWithObservedUnitCost(proposedCategory, currentUnitCost);
@@ -178,15 +179,14 @@ class SavingsRepositoryImpl implements SavingsRepository {
     return normalized;
   }
 
-  List<String> _readStringList(dynamic value) {
+  /// Legge required_attributes accettando sia il nuovo formato {key,label}
+  /// sia semplici stringhe (retrocompatibilità).
+  List<RequiredAttribute> _readRequiredAttributes(dynamic value) {
     if (value is! List) {
-      return const <String>[];
+      return const <RequiredAttribute>[];
     }
 
-    return value
-        .map((entry) => entry.toString())
-        .where((entry) => entry.trim().isNotEmpty)
-        .toList(growable: false);
+    return value.map(RequiredAttribute.fromJson).toList(growable: false);
   }
 
   double _asDouble(dynamic value) {

@@ -294,31 +294,7 @@ class _ProductInsightCard extends StatelessWidget {
           ),
 
           // Sezione Chip: Attributi specifici del prodotto (se presenti)
-          if (best.specificAttributes.isNotEmpty) ...<Widget>[
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 10),
-              child: Divider(height: 1, color: Color(0xFFF1F3F5)),
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              // Mappatura dinamica della Map<String, String> degli attributi in Chip
-              children: best.specificAttributes.entries.map((entry) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8F9FA),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFFE9ECEF)),
-                  ),
-                  child: Text(
-                    '${entry.key}: ${entry.value}',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF495057)),
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
+         
         ],
       ),
     );

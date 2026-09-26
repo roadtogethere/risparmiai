@@ -1,4 +1,5 @@
 import 'package:risparmiai/savings_checker/domain/entities/category_reference.dart';
+import 'package:risparmiai/savings_checker/domain/entities/required_attribute.dart';
 
 class CategoryReferenceModel extends CategoryReference {
   const CategoryReferenceModel({
@@ -12,6 +13,8 @@ class CategoryReferenceModel extends CategoryReference {
   });
 
   factory CategoryReferenceModel.fromJson(Map<String, dynamic> json) {
+    final rawRequiredAttributes = json['required_attributes'];
+
     return CategoryReferenceModel(
       key: (json['key'] ?? '').toString(),
       displayName: (json['display_name'] ?? '').toString(),
@@ -25,9 +28,9 @@ class CategoryReferenceModel extends CategoryReference {
       entriesCount: (json['entries_count'] is num)
           ? (json['entries_count'] as num).toInt()
           : int.tryParse(json['entries_count']?.toString() ?? '') ?? 0,
-      requiredAttributes: (json['required_attributes'] is List)
-          ? (json['required_attributes'] as List).map((item) => item.toString()).toList(growable: false)
-          : const <String>[],
+      requiredAttributes: rawRequiredAttributes is List
+          ? rawRequiredAttributes.map(RequiredAttribute.fromJson).toList(growable: false)
+          : const <RequiredAttribute>[],
     );
   }
 
@@ -51,7 +54,7 @@ class CategoryReferenceModel extends CategoryReference {
       'average_unit_cost': averageUnitCost,
       'sum_of_unit_costs': sumOfUnitCosts,
       'entries_count': entriesCount,
-      'required_attributes': requiredAttributes,
+      'required_attributes': requiredAttributes.map((attribute) => attribute.toJson()).toList(growable: false),
     };
   }
 
@@ -62,7 +65,7 @@ class CategoryReferenceModel extends CategoryReference {
     double? averageUnitCost,
     double? sumOfUnitCosts,
     int? entriesCount,
-    List<String>? requiredAttributes,
+    List<RequiredAttribute>? requiredAttributes,
   }) {
     return CategoryReferenceModel(
       key: key ?? this.key,

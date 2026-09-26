@@ -219,7 +219,7 @@ class _ArchiveEntryCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(color: const Color(0xFFE9ECEF)),
                     ),
-                    child: Text(attribute, style: const TextStyle(fontSize: 12, color: Color(0xFF495057))),
+                    child: Text(attribute.label, style: const TextStyle(fontSize: 12, color: Color(0xFF495057))),
                   );
                 }).toList(),
               ),

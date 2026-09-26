@@ -1,9 +1,7 @@
 import 'dart:convert';
 
 /// System prompt condiviso da tutti i provider AI.
-/// 
-/// Fissa le regole di business e definisce lo schema JSON esatto che il modello
-/// DEVE restituire per evitare risposte testuali extra o calcoli non autorizzati.
+/// Descrive il formato JSON che il modello deve restituire.
 const String kSavingsSystemPrompt = '''
 Sei un classificatore e parser di prodotti di spesa.
 
@@ -23,7 +21,8 @@ Regole vincolanti:
 7. Generalizza in modo aggressivo per prodotti dello stesso tipo di uso quotidiano: prodotti equivalenti vanno nella stessa categoria.
 8. Se non esiste una categoria plausibile, crea una nuova categoria con key semplice in snake_case, ad esempio pet_food, cleaning_product, milk, bread.
 9. I campi di categoria in category_match possono includere average_unit_cost ma non calcoli di business nel prodotto.
-10. Rispondi sempre in JSON valido senza testo extra, senza code fence.
+10. Ogni voce di required_attributes DEVE essere un oggetto con "key" (snake_case tecnico, es. "sheets_per_roll") e "label" (nome leggibile in italiano per l'utente finale, es. "Fogli per rotolo"). Non restituire mai required_attributes come semplici stringhe.
+11. Rispondi sempre in JSON valido senza testo extra, senza code fence.
 
 Formato richiesto:
 {
@@ -48,18 +47,17 @@ Formato richiesto:
       "display_name": "Carta Igienica",
       "primary_unit": "strappo",
       "average_unit_cost": 0.00185,
-      "required_attributes": ["rolls_count", "sheets_per_roll"]
+      "required_attributes": [
+        {"key": "rolls_count", "label": "Numero rotoli"},
+        {"key": "sheets_per_roll", "label": "Fogli per rotolo"}
+      ]
     }
   }
 }
 ''';
 
-/// Costruisce il testo dell'utente unendo il prompt di input con il catalogo prodotti JSON.
-///
-/// * [userPrompt]: La stringa inserita dall'utente (es. "Carta igienica 12 rotoli 5.99€").
-/// * [catalogJson]: Il catalogo di riferimento in formato stringa JSON (opzionale).
-///
-/// Restituisce la stringa formattata da inviare come contenuto `user` al modello.
+/// Costruisce il testo utente da inviare al modello, includendo
+/// il catalogo di riferimento (default + custom, uniti lato Dart).
 String buildUserPromptWithCatalog(String userPrompt, String? catalogJson) {
   final catalogText = (catalogJson != null && catalogJson.trim().isNotEmpty)
       ? '\nCatalogo di riferimento JSON:\n$catalogJson'
@@ -67,38 +65,42 @@ String buildUserPromptWithCatalog(String userPrompt, String? catalogJson) {
   return 'PROMPT UTENTE:\n$userPrompt$catalogText';
 }
 
-/// Utility class statica per il parsing, la pulizia e la validazione della risposta dell'AI.
-///
-/// Indipendente dal provider (Gemini, OpenAI, Anthropic), assicura che il JSON
-/// restituito rispetti rigorosamente il contratto dati dell'applicazione.
+/// Normalizza una singola voce di required_attributes, accettando sia il
+/// nuovo formato {key,label} sia stringhe semplici (retrocompatibilità con
+/// risposte AI vecchie o dataset legacy).
+Map<String, dynamic> _normalizeRequiredAttributeEntry(dynamic entry) {
+  if (entry is Map) {
+    final map = Map<String, dynamic>.from(entry);
+    final key = (map['key'] ?? '').toString();
+    final label = (map['label'] ?? '').toString();
+    return <String, dynamic>{
+      'key': key,
+      'label': label.isEmpty ? key : label,
+    };
+  }
+
+  final key = entry.toString();
+  return <String, dynamic>{'key': key, 'label': key};
+}
+
+/// Parsing e validazione della risposta testuale del modello (qualunque
+/// provider), condivisa da tutti i client AI in modo che la logica di
+/// business/validazione non venga duplicata per ogni integrazione.
 class AiResponseParser {
-  /// Costruttore privato per impedire l'istanziamento di questa utility class.
   const AiResponseParser._();
 
-  /// Analizza e valida la stringa grezza [rawResponse] restituita da un modello AI.
-  ///
-  /// * Rimuove eventuali blocchi code fence (` ```json ... ``` `).
-  /// * Converte il testo in un oggetto [Map].
-  /// * Valida la presenza di `product`, `category_match` e `category`.
-  /// * Verifica la presenza delle chiavi obbligatorie del prodotto.
-  /// * Garantisce che l'AI non abbia inserito campi di business non autorizzati (`unitCost`, `savings`, ecc.).
-  /// * Normalizza le unità di misura per la categoria `toilet_paper`.
-  ///
-  /// Lancia un [FormatException] se la risposta è vuota, non è un JSON valido o manca di campi obbligatori.
   static Map<String, dynamic> parseModelResponse(String rawResponse) {
     final trimmed = rawResponse.trim();
     if (trimmed.isEmpty) {
       throw const FormatException('Empty response from AI provider.');
     }
 
-    // Rimuove eventuali Markdown Code Fences se presenti nella risposta
     String jsonText = trimmed;
     final codeFenceMatch = RegExp(r'```(?:json)?\s*(.*?)\s*```', dotAll: true).firstMatch(trimmed);
     if (codeFenceMatch != null) {
       jsonText = codeFenceMatch.group(1) ?? trimmed;
     }
 
-    // Decodifica della stringa JSON
     final decoded = json.decode(jsonText);
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException('AI response is not a JSON object.');
@@ -107,7 +109,6 @@ class AiResponseParser {
     final product = decoded['product'];
     final categoryMatch = decoded['category_match'];
 
-    // Validazione dei nodi principali del JSON
     if (product is! Map) {
       throw const FormatException('AI response is missing the product object.');
     }
@@ -126,7 +127,6 @@ class AiResponseParser {
 
     final categoryMap = Map<String, dynamic>.from(categoryInfo as Map<dynamic, dynamic>);
 
-    // Validazione dei campi minimi richiesti per la mappa product
     final requiredProductKeys = <String>{
       'category_key',
       'brand',
@@ -140,7 +140,6 @@ class AiResponseParser {
       throw FormatException('AI response is missing required product fields: ${missingProductKeys.join(', ')}');
     }
 
-    // Controllo di sicurezza: scarta la risposta se il modello ha calcolato valori di business
     final businessFields = <String>{'unitCost', 'savings', 'averageUnitCost', 'comparison'};
     for (final businessField in businessFields) {
       if (productMap.containsKey(businessField)) {
@@ -148,7 +147,15 @@ class AiResponseParser {
       }
     }
 
-    // Sanificazione specifica per la categoria "toilet_paper"
+    // Normalizza required_attributes al formato {key,label}, accettando
+    // anche stringhe semplici per retrocompatibilità.
+    final rawRequiredAttributes = categoryMap['required_attributes'];
+    if (rawRequiredAttributes is List) {
+      categoryMap['required_attributes'] = rawRequiredAttributes.map(_normalizeRequiredAttributeEntry).toList(growable: false);
+    } else {
+      categoryMap['required_attributes'] = const <Map<String, dynamic>>[];
+    }
+
     final categoryKey = (productMap['category_key'] ?? categoryMap['key'] ?? '').toString();
     if (categoryKey == 'toilet_paper' || categoryMap['key'] == 'toilet_paper') {
       productMap['primary_unit_name'] = 'strappo';
