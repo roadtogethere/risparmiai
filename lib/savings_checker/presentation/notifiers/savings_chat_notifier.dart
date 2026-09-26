@@ -5,25 +5,35 @@ import '../../domain/repositories/savings_repository.dart';
 import '../models/chat_message.dart';
 
 class SavingsChatNotifier extends ChangeNotifier {
-  SavingsChatNotifier({
-    required SavingsRepository repository,
-  }) : _repository = repository;
+  SavingsChatNotifier({required SavingsRepository repository})
+    : _repository = repository;
 
   static String formatUnitCost(double value) {
     if (value.isNaN || value.isInfinite) {
-      return '0';
+      return 'N/D';
     }
 
+    // toStringAsFixed uses scientific notation for these values.
+    if (value.abs() >= 1e21) return value.toString();
     final abs = value.abs();
     if (abs >= 1) {
-      return value.toStringAsFixed(2).replaceFirst(RegExp(r'\.00$'), '').replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+      return value
+          .toStringAsFixed(2)
+          .replaceFirst(RegExp(r'0+$'), '')
+          .replaceFirst(RegExp(r'\.$'), '');
     }
 
     if (abs >= 0.01) {
-      return value.toStringAsFixed(4).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+      return value
+          .toStringAsFixed(4)
+          .replaceFirst(RegExp(r'0+$'), '')
+          .replaceFirst(RegExp(r'\.$'), '');
     }
 
-    final trimmed = value.toStringAsFixed(6).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+    final trimmed = value
+        .toStringAsFixed(6)
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
     return trimmed == '-0' ? '0' : trimmed;
   }
 
@@ -36,11 +46,13 @@ class SavingsChatNotifier extends ChangeNotifier {
   String? _errorMessage;
 
   List<ChatMessage> get messages => List<ChatMessage>.unmodifiable(_messages);
-  List<ProductAnalysis> get analyzedProducts => List<ProductAnalysis>.unmodifiable(_analyzedProducts);
+  List<ProductAnalysis> get analyzedProducts =>
+      List<ProductAnalysis>.unmodifiable(_analyzedProducts);
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
   Future<void> analyzeShoppingPrompt(String rawPrompt) async {
+    if (_isLoading) return;
     final prompt = rawPrompt.trim();
     if (prompt.isEmpty) {
       return;
@@ -48,16 +60,36 @@ class SavingsChatNotifier extends ChangeNotifier {
 
     final isMeaningfulPrompt = _looksLikeProductPrompt(prompt);
     if (!isMeaningfulPrompt) {
-      final friendlyMessage = 'Ciao! Inserisci un elemento da valutare e ti aiuterò.';
-      _messages.add(ChatMessage(sender: ChatMessageSender.user, text: prompt, createdAt: DateTime.now()));
-      _messages.add(ChatMessage(sender: ChatMessageSender.assistant, text: friendlyMessage, createdAt: DateTime.now()));
+      final friendlyMessage =
+          'Ciao! Inserisci un elemento da valutare e ti aiuterò.';
+      _messages.add(
+        ChatMessage(
+          sender: ChatMessageSender.user,
+          text: prompt,
+          createdAt: DateTime.now(),
+        ),
+      );
+      _messages.add(
+        ChatMessage(
+          sender: ChatMessageSender.assistant,
+          text: friendlyMessage,
+          createdAt: DateTime.now(),
+        ),
+      );
       _errorMessage = friendlyMessage;
       notifyListeners();
       return;
     }
 
-    _messages.add(ChatMessage(sender: ChatMessageSender.user, text: prompt, createdAt: DateTime.now()));
+    _messages.add(
+      ChatMessage(
+        sender: ChatMessageSender.user,
+        text: prompt,
+        createdAt: DateTime.now(),
+      ),
+    );
     _errorMessage = null;
+    _analyzedProducts.clear();
     _isLoading = true;
     notifyListeners();
 
@@ -69,11 +101,18 @@ class SavingsChatNotifier extends ChangeNotifier {
         ..addAll(products);
 
       final summary = _buildAssistantSummary(products);
-      _messages.add(ChatMessage(sender: ChatMessageSender.assistant, text: summary, createdAt: DateTime.now()));
+      _messages.add(
+        ChatMessage(
+          sender: ChatMessageSender.assistant,
+          text: summary,
+          createdAt: DateTime.now(),
+        ),
+      );
     } catch (error) {
-      final friendlyMessage = error.toString().contains('Inserisci un elemento da valutare')
+      final friendlyMessage =
+          error.toString().contains('Inserisci un elemento da valutare')
           ? error.toString().replaceFirst('Bad state: ', '')
-          : 'Ciao! Inserisci un elemento da valutare e ti aiuterò.';
+          : 'Analisi non riuscita. Verifica i dati e la configurazione, poi riprova.';
       _errorMessage = friendlyMessage;
       _messages.add(
         ChatMessage(
@@ -115,7 +154,9 @@ class SavingsChatNotifier extends ChangeNotifier {
 
     final hasLetters = RegExp(r'[a-zà-ù]').hasMatch(normalized);
     final hasNumber = RegExp(r'\d').hasMatch(normalized);
-    final hasProductWord = RegExp(r'\b(carta|igienica|detergente|lavastoviglie|pastiglie|pane|latte|sapone|shampoo|acqua|pasta|biscotti|caffè|caffe|rotoli|strappi|kg|litro|ml|euro|\€|prezzo)\b').hasMatch(normalized);
+    final hasProductWord = RegExp(
+      r'\b(carta|igienica|detergente|lavastoviglie|pastiglie|pane|latte|sapone|shampoo|acqua|pasta|biscotti|caffè|caffe|rotoli|strappi|kg|litro|ml|euro|\€|prezzo)\b',
+    ).hasMatch(normalized);
 
     return hasLetters && (hasNumber || hasProductWord);
   }
@@ -134,6 +175,8 @@ class SavingsChatNotifier extends ChangeNotifier {
     }
 
     final fallback = buffer.toString().trim();
-    return fallback.isNotEmpty ? fallback : 'Nessun dato disponibile per questo prodotto.';
+    return fallback.isNotEmpty
+        ? fallback
+        : 'Nessun dato disponibile per questo prodotto.';
   }
 }

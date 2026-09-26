@@ -19,9 +19,9 @@ class SavingsRepositoryImpl implements SavingsRepository {
     SavingsCalculatorService? calculator,
     CategoryReferenceStore? categoryStore,
     this.useMockData = false,
-  })  : _aiClient = aiClient ?? openAiClient,
-        _calculator = calculator ?? const SavingsCalculatorService(),
-        _categoryStore = categoryStore ?? const CategoryReferenceStore();
+  }) : _aiClient = aiClient ?? openAiClient,
+       _calculator = calculator ?? const SavingsCalculatorService(),
+       _categoryStore = categoryStore ?? const CategoryReferenceStore();
 
   final AiSavingsClient? _aiClient;
   final SavingsCalculatorService _calculator;
@@ -37,73 +37,112 @@ class SavingsRepositoryImpl implements SavingsRepository {
       throw StateError('Ciao! Inserisci un elemento da valutare e ti aiuterò.');
     }
 
-    if (useMockData || _aiClient == null) {
-      debugPrint('Risparmiai repository: using mock data for prompt "$userPrompt"');
+    if (useMockData) {
+      debugPrint(
+        'Risparmiai repository: using mock data for prompt "$userPrompt"',
+      );
       return _buildMockProductsForPrompt(userPrompt);
     }
 
-    debugPrint('Risparmiai repository: calling AI provider for prompt "$userPrompt"');
+    debugPrint(
+      'Risparmiai repository: calling AI provider for prompt "$userPrompt"',
+    );
 
-    try {
-      final normalizedInput = userPrompt.trim();
-      final categories = await _categoryStore.loadCategories();
-      final catalogJson = jsonEncode(<String, dynamic>{
-        'categories': categories.map((category) => category.toJson()).toList(growable: false),
-      });
+    final aiClient = _aiClient;
+    if (aiClient == null) throw StateError('AI provider is not configured.');
+    final normalizedInput = userPrompt.trim();
+    final categories = await _categoryStore.loadCategories();
+    final catalogJson = jsonEncode(<String, dynamic>{
+      'categories': categories
+          .map((category) => category.toJson())
+          .toList(growable: false),
+    });
 
-      final parsedPayload = await _aiClient.analyzeProductWithCatalog(normalizedInput, catalogJson);
-      final productData = parsedPayload['product'] as Map<String, dynamic>? ?? const <String, dynamic>{};
-      final categoryMatch = parsedPayload['category_match'] as Map<String, dynamic>? ?? const <String, dynamic>{};
-      final matchedCategory = categoryMatch['category'] as Map<String, dynamic>?;
+    final parsedPayload = await aiClient.analyzeProductWithCatalog(
+      normalizedInput,
+      catalogJson,
+    );
+    final productData =
+        parsedPayload['product'] as Map<String, dynamic>? ??
+        const <String, dynamic>{};
+    final categoryMatch =
+        parsedPayload['category_match'] as Map<String, dynamic>? ??
+        const <String, dynamic>{};
+    final matchedCategory = categoryMatch['category'] as Map<String, dynamic>?;
 
-      final categoryKey = (productData['category_key'] ?? matchedCategory?['key'] ?? 'custom_category').toString();
-      final totalUnitsCount = _calculateTotalUnits(productData);
-      final totalPrice = _asDouble(productData['total_price']);
-      final brand = (productData['brand'] ?? 'Brand sconosciuto').toString();
-      final primaryUnitName = (productData['primary_unit_name'] ?? matchedCategory?['primary_unit'] ?? 'unità').toString();
-      final category = _mapCategoryKeyToEnum(categoryKey);
-      final attributes = _normalizeSpecificAttributes(productData['specific_attributes'] as Map<String, dynamic>? ?? const <String, dynamic>{});
+    final categoryKey = _requiredText(
+      productData['category_key'],
+      'category_key',
+    );
+    final totalUnitsCount = _calculateTotalUnits(productData);
+    final totalPrice = _requiredNumber(
+      productData['total_price'],
+      'total_price',
+      allowZero: true,
+    );
+    final brand = (productData['brand'] ?? 'Brand sconosciuto').toString();
+    final primaryUnitName = _requiredText(
+      productData['primary_unit_name'],
+      'primary_unit_name',
+    );
+    final category = _mapCategoryKeyToEnum(categoryKey);
+    final attributes = _normalizeSpecificAttributes(
+      productData['specific_attributes'] as Map<String, dynamic>? ??
+          const <String, dynamic>{},
+    );
 
-      final currentUnitCost = totalUnitsCount > 0 ? totalPrice / totalUnitsCount : 0.0;
+    final currentUnitCost = totalPrice / totalUnitsCount;
+    if (!currentUnitCost.isFinite || (totalPrice > 0 && currentUnitCost <= 0)) {
+      throw const FormatException('Invalid unit cost.');
+    }
 
-      // Aggiorna sempre lo store (cheapest + media) ad ogni analisi valida,
-      // indipendentemente da is_exact_match/needs_update: ogni prezzo
-      // osservato contribuisce alla storia della categoria.
-      CategoryReferenceModel? updatedCategory;
-      if (categoryKey.isNotEmpty && currentUnitCost > 0) {
-        final proposedCategory = CategoryReferenceModel(
-          key: categoryKey,
-          displayName: (matchedCategory?['display_name'] ?? categoryKey).toString(),
-          primaryUnit: primaryUnitName,
-          averageUnitCost: matchedCategory != null ? _asDouble(matchedCategory['average_unit_cost']) : currentUnitCost,
-          requiredAttributes: _readRequiredAttributes(matchedCategory?['required_attributes']),
-        );
+    final product = ProductAnalysis(
+      id: 'product_${DateTime.now().microsecondsSinceEpoch}',
+      productName: _defaultProductNameForCategory(category),
+      brand: brand,
+      category: category,
+      totalPrice: totalPrice,
+      primaryUnitName: primaryUnitName,
+      totalUnitsCount: totalUnitsCount,
+      specificAttributes: attributes,
+    );
 
-        await _categoryStore.upsertCategoryWithObservedUnitCost(proposedCategory, currentUnitCost);
-        final refreshed = await _categoryStore.loadCustomCategories();
-        updatedCategory = refreshed.where((item) => item.key == categoryKey).cast<CategoryReferenceModel?>().firstOrNull;
-      }
-
-      final product = ProductAnalysis(
-        id: 'product_${DateTime.now().microsecondsSinceEpoch}',
-        productName: _defaultProductNameForCategory(category),
-        brand: brand,
-        category: category,
-        totalPrice: totalPrice,
-        primaryUnitName: primaryUnitName,
-        totalUnitsCount: totalUnitsCount,
-        specificAttributes: attributes,
-        analysisSummary: _buildAnalysisSummary(primaryUnitName, currentUnitCost, updatedCategory),
+    // Aggiorna sempre lo store (cheapest + media) ad ogni analisi valida,
+    // indipendentemente da is_exact_match/needs_update: ogni prezzo
+    // osservato contribuisce alla storia della categoria.
+    CategoryReferenceModel? updatedCategory;
+    if (categoryKey.isNotEmpty && currentUnitCost > 0) {
+      final proposedCategory = CategoryReferenceModel(
+        key: categoryKey,
+        displayName: (matchedCategory?['display_name'] ?? categoryKey)
+            .toString(),
+        primaryUnit: primaryUnitName,
+        averageUnitCost: currentUnitCost,
+        requiredAttributes: _readRequiredAttributes(
+          matchedCategory?['required_attributes'],
+        ),
       );
 
-      return <ProductAnalysis>[product];
-    } on Exception catch (error) {
-      if (kDebugMode) {
-        debugPrint('SavingsRepositoryImpl analyzeProducts error: $error');
-        rethrow;
-      }
-      return _buildMockProductsForPrompt(userPrompt);
+      await _categoryStore.upsertCategoryWithObservedUnitCost(
+        proposedCategory,
+        currentUnitCost,
+      );
+      final refreshed = await _categoryStore.loadCustomCategories();
+      updatedCategory = refreshed
+          .where((item) => item.key == categoryKey)
+          .cast<CategoryReferenceModel?>()
+          .firstOrNull;
     }
+
+    return <ProductAnalysis>[
+      product.copyWith(
+        analysisSummary: _buildAnalysisSummary(
+          primaryUnitName,
+          currentUnitCost,
+          updatedCategory,
+        ),
+      ),
+    ];
   }
 
   @override
@@ -155,23 +194,32 @@ class SavingsRepositoryImpl implements SavingsRepository {
     final lowered = prompt.toLowerCase();
     final hasLetters = RegExp(r'[a-zà-ù]').hasMatch(lowered);
     final hasNumber = RegExp(r'\d').hasMatch(lowered);
-    final hasMeaningfulWords = RegExp(r'\b(carta|igienica|detergente|lavastoviglie|pasta|latte|pane|acqua|cibo|biscotti|sapone|shampoo|pastiglie|rotoli|strappi|euro|€|prezzo|kg|litro|ml|gr|g)\b').hasMatch(lowered);
+    final hasMeaningfulWords = RegExp(
+      r'\b(carta|igienica|detergente|lavastoviglie|pasta|latte|pane|acqua|cibo|biscotti|sapone|shampoo|pastiglie|rotoli|strappi|euro|€|prezzo|kg|litro|ml|gr|g)\b',
+    ).hasMatch(lowered);
 
     return hasLetters && (hasNumber || hasMeaningfulWords);
   }
 
   double _calculateTotalUnits(Map<String, dynamic> payload) {
-    final unitsPerPackage = _asDouble(payload['units_per_package'] ?? 1);
+    final unitsPerPackage = _requiredNumber(
+      payload['units_per_package'],
+      'units_per_package',
+    );
     final subUnits = payload['sub_units_per_package'];
-
-    if (subUnits != null && subUnits.toString().trim().isNotEmpty) {
-      return unitsPerPackage * _asDouble(subUnits);
+    // Null/absent means direct quantity. A supplied factor must be valid.
+    final quantity = subUnits == null
+        ? unitsPerPackage
+        : unitsPerPackage * _requiredNumber(subUnits, 'sub_units_per_package');
+    if (!quantity.isFinite || quantity <= 0) {
+      throw const FormatException('Invalid total quantity.');
     }
-
-    return unitsPerPackage;
+    return quantity;
   }
 
-  Map<String, dynamic> _normalizeSpecificAttributes(Map<String, dynamic> source) {
+  Map<String, dynamic> _normalizeSpecificAttributes(
+    Map<String, dynamic> source,
+  ) {
     final normalized = <String, dynamic>{};
     for (final entry in source.entries) {
       normalized[entry.key.toString()] = entry.value;
@@ -189,17 +237,36 @@ class SavingsRepositoryImpl implements SavingsRepository {
     return value.map(RequiredAttribute.fromJson).toList(growable: false);
   }
 
-  double _asDouble(dynamic value) {
-    if (value is num) {
-      return value.toDouble();
+  double _requiredNumber(
+    dynamic value,
+    String field, {
+    bool allowZero = false,
+  }) {
+    final number = value is num
+        ? value.toDouble()
+        : value is String
+        ? double.tryParse(value.replaceAll(',', '.'))
+        : null;
+    if (number == null ||
+        !number.isFinite ||
+        (allowZero ? number < 0 : number <= 0)) {
+      throw FormatException('Missing or invalid $field.');
     }
-    if (value is String) {
-      return double.tryParse(value.replaceAll(',', '.')) ?? 0;
-    }
-    return 0;
+    return number;
   }
 
-  String _buildAnalysisSummary(String primaryUnitName, double currentUnitCost, CategoryReferenceModel? updatedCategory) {
+  String _requiredText(dynamic value, String field) {
+    if (value is! String || value.trim().isEmpty) {
+      throw FormatException('Missing or invalid $field.');
+    }
+    return value.trim();
+  }
+
+  String _buildAnalysisSummary(
+    String primaryUnitName,
+    double currentUnitCost,
+    CategoryReferenceModel? updatedCategory,
+  ) {
     if (updatedCategory == null || updatedCategory.entriesCount <= 1) {
       return 'Il prezzo del prodotto indicato è €${currentUnitCost.toStringAsFixed(4)}/$primaryUnitName. '
           'Non ho ancora uno storico per questa categoria: sarà il primo riferimento salvato.';
@@ -235,7 +302,8 @@ class SavingsRepositoryImpl implements SavingsRepository {
           'sheetsPerRoll': 500,
           'material': 'cellulosa',
         },
-        analysisSummary: 'Prezzo corretto espresso per strappo, con totale di 6000 unità.',
+        analysisSummary:
+            'Prezzo corretto espresso per strappo, con totale di 6000 unità.',
       ),
       ProductAnalysis(
         id: 'detersivo_1',
@@ -283,24 +351,42 @@ class SavingsRepositoryImpl implements SavingsRepository {
       ),
     }.toList();
 
-    final matched = mockProducts.where((product) {
-      final haystack = '${product.productName} ${product.brand} ${product.primaryUnitName}'.toLowerCase();
-      final promptContains = <String>[
-        'carta', 'igienica', 'detersivo', 'pane', 'pastiglie', 'lavastoviglie', 'capsule', 'milk', 'latte', 'olio', 'spazzatura', 'bag', 'sacchetto'
-      ];
+    final matched = mockProducts
+        .where((product) {
+          final haystack =
+              '${product.productName} ${product.brand} ${product.primaryUnitName}'
+                  .toLowerCase();
+          final promptContains = <String>[
+            'carta',
+            'igienica',
+            'detersivo',
+            'pane',
+            'pastiglie',
+            'lavastoviglie',
+            'capsule',
+            'milk',
+            'latte',
+            'olio',
+            'spazzatura',
+            'bag',
+            'sacchetto',
+          ];
 
-      for (final keyword in promptContains) {
-        if (normalizedPrompt.contains(keyword) && haystack.contains(keyword)) {
-          return true;
-        }
-      }
+          for (final keyword in promptContains) {
+            if (normalizedPrompt.contains(keyword) &&
+                haystack.contains(keyword)) {
+              return true;
+            }
+          }
 
-      if (normalizedPrompt.contains('lavastoviglie') && haystack.contains('lavastoviglie')) {
-        return true;
-      }
+          if (normalizedPrompt.contains('lavastoviglie') &&
+              haystack.contains('lavastoviglie')) {
+            return true;
+          }
 
-      return false;
-    }).toList(growable: false);
+          return false;
+        })
+        .toList(growable: false);
 
     if (matched.isNotEmpty) {
       return matched;

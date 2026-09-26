@@ -41,7 +41,10 @@ class _ArchivePageState extends State<ArchivePage> {
         backgroundColor: Colors.white,
         title: const Text(
           'Archivio',
-          style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1A1A1A),
+          ),
         ),
         centerTitle: true,
       ),
@@ -53,7 +56,14 @@ class _ArchivePageState extends State<ArchivePage> {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final categories = snapshot.data ?? const <CategoryReferenceModel>[];
+            if (snapshot.hasError) {
+              return const Center(
+                child: Text('Impossibile leggere archivio. Riprova.'),
+              );
+            }
+
+            final categories =
+                snapshot.data ?? const <CategoryReferenceModel>[];
 
             if (categories.isEmpty) {
               return _EmptyArchiveState();
@@ -92,11 +102,19 @@ class _EmptyArchiveState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey.shade400),
+            Icon(
+              Icons.inventory_2_outlined,
+              size: 48,
+              color: Colors.grey.shade400,
+            ),
             const SizedBox(height: 16),
             Text(
               'Nessun prodotto salvato',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -112,10 +130,7 @@ class _EmptyArchiveState extends StatelessWidget {
 }
 
 class _ArchiveEntryCard extends StatelessWidget {
-  const _ArchiveEntryCard({
-    required this.category,
-    required this.onDelete,
-  });
+  const _ArchiveEntryCard({required this.category, required this.onDelete});
 
   final CategoryReferenceModel category;
   final VoidCallback onDelete;
@@ -158,12 +173,21 @@ class _ArchiveEntryCard extends StatelessWidget {
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    category.displayName.isNotEmpty ? category.displayName : category.key,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
+                    category.displayName.isNotEmpty
+                        ? category.displayName
+                        : category.key,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1A1A1A),
+                    ),
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFE6F4EA),
                     borderRadius: BorderRadius.circular(12),
@@ -171,11 +195,19 @@ class _ArchiveEntryCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: const <Widget>[
-                      Icon(Icons.stars_rounded, size: 14, color: Color(0xFF137333)),
+                      Icon(
+                        Icons.stars_rounded,
+                        size: 14,
+                        color: Color(0xFF137333),
+                      ),
                       SizedBox(width: 4),
                       Text(
                         'Più economico',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF137333)),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF137333),
+                        ),
                       ),
                     ],
                   ),
@@ -190,7 +222,10 @@ class _ArchiveEntryCard extends StatelessWidget {
                   const TextSpan(text: 'Prezzo migliore: '),
                   TextSpan(
                     text: '€${category.averageUnitCost.toStringAsFixed(4)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF137333)),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF137333),
+                    ),
                   ),
                   TextSpan(text: ' / ${category.primaryUnit}'),
                 ],
@@ -213,13 +248,22 @@ class _ArchiveEntryCard extends StatelessWidget {
                 runSpacing: 6,
                 children: category.requiredAttributes.map((attribute) {
                   return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8F9FA),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(color: const Color(0xFFE9ECEF)),
                     ),
-                    child: Text(attribute.label, style: const TextStyle(fontSize: 12, color: Color(0xFF495057))),
+                    child: Text(
+                      attribute.label,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF495057),
+                      ),
+                    ),
                   );
                 }).toList(),
               ),

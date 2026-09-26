@@ -13,13 +13,25 @@ import '../models/category_reference_model.dart';
 /// - default_categories.json (statico, mai modificato)
 /// - user_custom_categories (dinamico, salvato in SharedPreferences)
 class CategoryReferenceStore {
-  const CategoryReferenceStore({
-    CategoryReferenceDataSource? defaultDataSource,
-  }) : _defaultDataSource = defaultDataSource ?? const CategoryReferenceDataSource();
+  const CategoryReferenceStore({CategoryReferenceDataSource? defaultDataSource})
+    : _defaultDataSource =
+          defaultDataSource ?? const CategoryReferenceDataSource();
 
   static const String _prefsKey = 'user_custom_categories';
 
   final CategoryReferenceDataSource _defaultDataSource;
+
+  // Shared by all instances in the app isolate, including ArchivePage.
+  static Future<void> _pendingWrite = Future<void>.value();
+
+  static Future<void> _serializeWrite(Future<void> Function() action) {
+    final operation = _pendingWrite.then((_) => action());
+    _pendingWrite = operation.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stack) {},
+    );
+    return operation;
+  }
 
   /// Ritorna il catalogo unito: categorie custom sovrascrivono quelle di
   /// default con la stessa key (perché contengono dati più aggiornati).
@@ -42,25 +54,62 @@ class CategoryReferenceStore {
   /// senza quelle di default — utile per la schermata Archivio.
   Future<List<CategoryReferenceModel>> loadCustomCategories() async {
     final prefs = await SharedPreferences.getInstance();
+    // Failed platform writes can leave uncommitted values in the plugin cache.
+    await prefs.reload();
     final raw = prefs.getString(_prefsKey);
-
-    if (raw == null || raw.trim().isEmpty) {
-      return const <CategoryReferenceModel>[];
+    if (raw == null) return const <CategoryReferenceModel>[];
+    final decoded = jsonDecode(raw);
+    if (decoded is! List) {
+      throw const FormatException('Category archive must be a list.');
     }
-
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        return const <CategoryReferenceModel>[];
+    final categories = <CategoryReferenceModel>[];
+    final keys = <String>{};
+    for (final entry in decoded) {
+      if (entry is! Map<String, dynamic>) {
+        throw const FormatException('Invalid category archive entry.');
       }
-
-      return decoded
-          .whereType<Map<String, dynamic>>()
-          .map(CategoryReferenceModel.fromJson)
-          .toList(growable: false);
-    } catch (_) {
-      return const <CategoryReferenceModel>[];
+      for (final field in ['key', 'display_name', 'primary_unit']) {
+        if (entry[field] is! String ||
+            (entry[field] as String).trim().isEmpty) {
+          throw FormatException('Invalid category archive field: $field.');
+        }
+      }
+      // Legacy entries may omit sum/count. No migration is performed.
+      for (final field in [
+        'average_unit_cost',
+        'sum_of_unit_costs',
+        'entries_count',
+      ]) {
+        if (field != 'average_unit_cost' && !entry.containsKey(field)) continue;
+        final value = num.tryParse(entry[field].toString());
+        if (value == null ||
+            !value.isFinite ||
+            value < 0 ||
+            (field == 'entries_count' &&
+                (value != value.truncateToDouble() ||
+                    (entry[field] is String &&
+                        int.tryParse(entry[field]) == null)))) {
+          throw FormatException('Invalid category archive field: $field.');
+        }
+      }
+      final attributes = entry['required_attributes'];
+      if (attributes is! List ||
+          attributes.any(
+            (attribute) =>
+                attribute is! String &&
+                (attribute is! Map ||
+                    attribute['key'] is! String ||
+                    attribute['label'] is! String),
+          )) {
+        throw const FormatException('Invalid category attributes.');
+      }
+      final category = CategoryReferenceModel.fromJson(entry);
+      if (!keys.add(category.key)) {
+        throw const FormatException('Duplicate category archive key.');
+      }
+      categories.add(category);
     }
+    return categories;
   }
 
   /// Inserisce o aggiorna una categoria custom. Se esiste già una voce con
@@ -69,12 +118,23 @@ class CategoryReferenceStore {
   Future<void> upsertCategoryWithObservedUnitCost(
     CategoryReferenceModel incoming,
     double observedUnitCost,
-  ) async {
+  ) => _serializeWrite(() async {
+    if (!observedUnitCost.isFinite ||
+        observedUnitCost <= 0 ||
+        incoming.key.trim().isEmpty ||
+        incoming.displayName.trim().isEmpty ||
+        incoming.primaryUnit.trim().isEmpty) {
+      throw const FormatException('Invalid category observation.');
+    }
     final custom = (await loadCustomCategories()).toList();
-    final existingIndex = custom.indexWhere((category) => category.key == incoming.key);
+    final existingIndex = custom.indexWhere(
+      (category) => category.key == incoming.key,
+    );
 
     if (existingIndex >= 0) {
-      custom[existingIndex] = custom[existingIndex].withNewObservedUnitCost(observedUnitCost);
+      custom[existingIndex] = custom[existingIndex].withNewObservedUnitCost(
+        observedUnitCost,
+      );
     } else {
       // Prima volta per questa key: si parte dai dati proposti (es. dall'AI)
       // e si registra subito il primo prezzo osservato.
@@ -82,17 +142,25 @@ class CategoryReferenceStore {
     }
 
     await _saveCustomCategories(custom);
-  }
+  });
 
   /// Rimuove una categoria custom (non tocca mai i default).
-  Future<void> removeCategory(String key) async {
-    final custom = (await loadCustomCategories()).where((category) => category.key != key).toList(growable: false);
+  Future<void> removeCategory(String key) => _serializeWrite(() async {
+    final custom = (await loadCustomCategories())
+        .where((category) => category.key != key)
+        .toList(growable: false);
     await _saveCustomCategories(custom);
-  }
+  });
 
-  Future<void> _saveCustomCategories(List<CategoryReferenceModel> categories) async {
+  Future<void> _saveCustomCategories(
+    List<CategoryReferenceModel> categories,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
-    final encoded = jsonEncode(categories.map((category) => category.toJson()).toList(growable: false));
-    await prefs.setString(_prefsKey, encoded);
+    final encoded = jsonEncode(
+      categories.map((category) => category.toJson()).toList(growable: false),
+    );
+    if (!await prefs.setString(_prefsKey, encoded)) {
+      throw StateError('Unable to save category archive.');
+    }
   }
 }

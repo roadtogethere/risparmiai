@@ -20,14 +20,20 @@ Future<void> main() async {
     isDotEnvLoaded = false;
   }
 
-  final providerName = (dotenv.env['AI_PROVIDER'] ?? 'openai').trim().toLowerCase();
+  final providerName = (dotenv.env['AI_PROVIDER'] ?? 'openai')
+      .trim()
+      .toLowerCase();
   final openAiKey = dotenv.env['OPENAI_API_KEY'];
   final geminiKey = dotenv.env['GEMINI_API_KEY'];
 
   debugPrint('Risparmiai startup: dotenv loaded = $isDotEnvLoaded');
   debugPrint('Risparmiai startup: AI_PROVIDER=$providerName');
-  debugPrint('Risparmiai startup: OPENAI_API_KEY present = ${((openAiKey ?? '').trim().isNotEmpty)}');
-  debugPrint('Risparmiai startup: GEMINI_API_KEY present = ${((geminiKey ?? '').trim().isNotEmpty)}');
+  debugPrint(
+    'Risparmiai startup: OPENAI_API_KEY present = ${((openAiKey ?? '').trim().isNotEmpty)}',
+  );
+  debugPrint(
+    'Risparmiai startup: GEMINI_API_KEY present = ${((geminiKey ?? '').trim().isNotEmpty)}',
+  );
 
   AiSavingsClient? aiClient;
   switch (providerName) {
@@ -36,7 +42,9 @@ Future<void> main() async {
         aiClient = GeminiSavingsClient(apiKey: geminiKey);
         debugPrint('Risparmiai startup: selected Gemini client');
       } else {
-        debugPrint('Risparmiai startup: Gemini selected but key missing, falling back to mock');
+        debugPrint(
+          'Risparmiai startup: Gemini selected but key missing, analysis will report a configuration error',
+        );
       }
       break;
     case 'mock':
@@ -49,28 +57,23 @@ Future<void> main() async {
         aiClient = OpenAiSavingsClient(apiKey: openAiKey);
         debugPrint('Risparmiai startup: selected OpenAI client');
       } else {
-        debugPrint('Risparmiai startup: OpenAI selected but key missing, falling back to mock');
+        debugPrint(
+          'Risparmiai startup: OpenAI selected but key missing, analysis will report a configuration error',
+        );
       }
       break;
   }
 
-  final useMockData = aiClient == null;
-  debugPrint('Risparmiai startup: final provider = ${useMockData ? 'mock' : providerName}; usingMockData = $useMockData');
-
-  runApp(
-    MainApp(
-      useMockData: useMockData,
-      aiClient: aiClient,
-    ),
+  final useMockData = providerName == 'mock';
+  debugPrint(
+    'Risparmiai startup: final provider = ${useMockData ? 'mock' : providerName}; usingMockData = $useMockData',
   );
+
+  runApp(MainApp(useMockData: useMockData, aiClient: aiClient));
 }
 
 class MainApp extends StatelessWidget {
-  const MainApp({
-    super.key,
-    required this.useMockData,
-    this.aiClient,
-  });
+  const MainApp({super.key, required this.useMockData, this.aiClient});
 
   final bool useMockData;
   final AiSavingsClient? aiClient;

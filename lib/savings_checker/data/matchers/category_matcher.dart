@@ -3,9 +3,8 @@ import 'package:risparmiai/savings_checker/data/models/category_match_result.dar
 import 'package:risparmiai/savings_checker/domain/entities/suggested_category.dart';
 
 class CategoryMatcher {
-  CategoryMatcher({
-    CategoryReferenceDataSource? dataSource,
-  }) : _dataSource = dataSource ?? const CategoryReferenceDataSource();
+  CategoryMatcher({CategoryReferenceDataSource? dataSource})
+    : _dataSource = dataSource ?? const CategoryReferenceDataSource();
 
   final CategoryReferenceDataSource _dataSource;
 
@@ -45,15 +44,16 @@ class CategoryMatcher {
         category.key,
         category.displayName,
         category.primaryUnit,
-        ...category.requiredAttributes,
+        ...category.requiredAttributes.map((attribute) => attribute.key),
+        ...category.requiredAttributes.map((attribute) => attribute.label),
       };
 
-      final candidates = <String>{
-        ...aliases,
-        ...aliases.map(normalizeText),
-      };
+      final candidates = <String>{...aliases, ...aliases.map(normalizeText)};
 
-      if (candidates.any((value) => normalizedInput.contains(value) || value.contains(normalizedInput))) {
+      if (candidates.any(
+        (value) =>
+            normalizedInput.contains(value) || value.contains(normalizedInput),
+      )) {
         return CategoryMatchResult(
           defaultCategory: category,
           isExactMatch: true,
@@ -81,10 +81,12 @@ class CategoryMatcher {
   }
 
   String _suggestCategoryKey(String normalizedInput) {
-    if (normalizedInput.contains('carta') && normalizedInput.contains('igienica')) {
+    if (normalizedInput.contains('carta') &&
+        normalizedInput.contains('igienica')) {
       return 'toilet_paper';
     }
-    if (normalizedInput.contains('detersivo') && normalizedInput.contains('lavatrice')) {
+    if (normalizedInput.contains('detersivo') &&
+        normalizedInput.contains('lavatrice')) {
       return 'laundry_detergent_liquid';
     }
     if (normalizedInput.contains('pane')) {
@@ -121,10 +123,12 @@ class CategoryMatcher {
     if (normalizedInput.contains('igienica')) {
       return 'strappo';
     }
-    if (normalizedInput.contains('lavatrice') || normalizedInput.contains('lavastoviglie')) {
+    if (normalizedInput.contains('lavatrice') ||
+        normalizedInput.contains('lavastoviglie')) {
       return 'lavaggio';
     }
-    if (normalizedInput.contains('caffe') || normalizedInput.contains('capsule')) {
+    if (normalizedInput.contains('caffe') ||
+        normalizedInput.contains('capsule')) {
       return 'capsula';
     }
     if (normalizedInput.contains('latte') || normalizedInput.contains('olio')) {
@@ -140,7 +144,8 @@ class CategoryMatcher {
     if (normalizedInput.contains('igienica')) {
       return <String>['rolls_count', 'sheets_per_roll'];
     }
-    if (normalizedInput.contains('lavatrice') || normalizedInput.contains('lavastoviglie')) {
+    if (normalizedInput.contains('lavatrice') ||
+        normalizedInput.contains('lavastoviglie')) {
       return <String>['total_liters', 'total_washes'];
     }
     if (normalizedInput.contains('pane')) {

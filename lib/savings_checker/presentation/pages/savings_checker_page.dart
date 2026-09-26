@@ -33,7 +33,9 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA), // Sfondo neutro, pulito e moderno
+      backgroundColor: const Color(
+        0xFFF8F9FA,
+      ), // Sfondo neutro, pulito e moderno
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0.5,
@@ -49,7 +51,10 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
         actions: <Widget>[
           // Pulsante per navigare alla schermata dell'Archivio
           IconButton(
-            icon: const Icon(Icons.inventory_2_outlined, color: Color(0xFF495057)),
+            icon: const Icon(
+              Icons.inventory_2_outlined,
+              color: Color(0xFF495057),
+            ),
             tooltip: 'Archivio',
             onPressed: () {
               Navigator.of(context).push(
@@ -67,19 +72,28 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
               child: ListView.builder(
                 // Inverte l'ordine della lista: utile per le chat dove i nuovi messaggi compaiono in basso
                 reverse: true,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 itemCount: notifier.messages.length,
                 itemBuilder: (context, index) {
                   // Inverte l'indice per mostrare il messaggio più recente in fondo alla vista
-                  final message = notifier.messages[notifier.messages.length - 1 - index];
+                  final message =
+                      notifier.messages[notifier.messages.length - 1 - index];
                   final isUser = message.sender == ChatMessageSender.user;
 
                   return Align(
                     // Allinea i messaggi dell'utente a destra e quelli del bot a sinistra
-                    alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                    alignment: isUser
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       constraints: BoxConstraints(
                         // Limita la larghezza massima del bubble al 78% dello schermo
                         maxWidth: MediaQuery.of(context).size.width * 0.78,
@@ -106,7 +120,9 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
                         style: TextStyle(
                           height: 1.4,
                           fontSize: 15,
-                          color: isUser ? Colors.white : const Color(0xFF212529),
+                          color: isUser
+                              ? Colors.white
+                              : const Color(0xFF212529),
                         ),
                       ),
                     ),
@@ -119,7 +135,10 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
             // Mostra la scheda del miglior prodotto solo se ci sono prodotti analizzati
             if (notifier.analyzedProducts.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: _ProductInsightCard(products: notifier.analyzedProducts),
               ),
 
@@ -140,11 +159,18 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
                       controller: _controller,
                       style: const TextStyle(fontSize: 15),
                       decoration: InputDecoration(
-                        hintText: 'Confronta prodotti (es. detersivo, carta)...',
-                        hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                        hintText:
+                            'Confronta prodotti (es. detersivo, carta)...',
+                        hintStyle: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 14,
+                        ),
                         filled: true,
                         fillColor: const Color(0xFFF1F3F5),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide.none,
@@ -155,7 +181,7 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  
+
                   // Pulsante Invio / Indicatore di caricamento
                   Material(
                     color: const Color(0xFF0F62FE),
@@ -163,7 +189,9 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
                     child: InkWell(
                       borderRadius: BorderRadius.circular(24),
                       // Disabilita il click se il notifier è in stato di caricamento
-                      onTap: notifier.isLoading ? null : () => _submitPrompt(context),
+                      onTap: notifier.isLoading
+                          ? null
+                          : () => _submitPrompt(context),
                       child: Padding(
                         padding: const EdgeInsets.all(12),
                         child: notifier.isLoading
@@ -173,7 +201,9 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
                                 height: 20,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
                                 ),
                               )
                             // Icona invio standard
@@ -196,6 +226,7 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
 
   /// Invia il prompt inserito al [SavingsChatNotifier] e pulisce il campo di testo
   Future<void> _submitPrompt(BuildContext context) async {
+    if (context.read<SavingsChatNotifier>().isLoading) return;
     final prompt = _controller.text;
     if (prompt.trim().isEmpty) return;
 
@@ -215,7 +246,9 @@ class _ProductInsightCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // Algoritmo di riduzione per individuare il prodotto con il costo unitario più basso
     final best = products.reduce((currentBest, candidate) {
-      return candidate.unitCost < currentBest.unitCost ? candidate : currentBest;
+      return candidate.unitCost < currentBest.unitCost
+          ? candidate
+          : currentBest;
     });
 
     final theme = Theme.of(context);
@@ -243,7 +276,10 @@ class _ProductInsightCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE6F4EA),
                   borderRadius: BorderRadius.circular(12),
@@ -251,7 +287,11 @@ class _ProductInsightCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: const [
-                    Icon(Icons.stars_rounded, size: 14, color: Color(0xFF137333)),
+                    Icon(
+                      Icons.stars_rounded,
+                      size: 14,
+                      color: Color(0xFF137333),
+                    ),
                     SizedBox(width: 4),
                     Text(
                       'Migliore convenienza',
@@ -267,7 +307,7 @@ class _ProductInsightCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          
+
           // Nome del prodotto vincitore e marca
           Text(
             '${best.brand} ${best.productName}',
@@ -285,8 +325,12 @@ class _ProductInsightCard extends StatelessWidget {
               children: [
                 const TextSpan(text: 'Costo unitario: '),
                 TextSpan(
-                  text: '${SavingsChatNotifier.formatUnitCost(best.unitCost)} €',
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF137333)),
+                  text:
+                      '${SavingsChatNotifier.formatUnitCost(best.unitCost)} €',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF137333),
+                  ),
                 ),
                 TextSpan(text: ' / ${best.primaryUnitName}'),
               ],
@@ -294,7 +338,6 @@ class _ProductInsightCard extends StatelessWidget {
           ),
 
           // Sezione Chip: Attributi specifici del prodotto (se presenti)
-         
         ],
       ),
     );
