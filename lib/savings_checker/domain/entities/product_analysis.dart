@@ -11,8 +11,10 @@ class ProductAnalysis {
     required this.totalUnitsCount,
     required this.specificAttributes,
     this.analysisSummary,
-  })  : assert(totalPrice >= 0, 'totalPrice must be >= 0'),
-        assert(totalUnitsCount > 0, 'totalUnitsCount must be > 0');
+    this.categoryKey,
+    this.canonicalMetric,
+  }) : assert(totalPrice >= 0, 'totalPrice must be >= 0'),
+       assert(totalUnitsCount > 0, 'totalUnitsCount must be > 0');
 
   final String id;
   final String productName;
@@ -23,6 +25,8 @@ class ProductAnalysis {
   final double totalUnitsCount;
   final Map<String, dynamic> specificAttributes;
   final String? analysisSummary;
+  final String? categoryKey;
+  final String? canonicalMetric;
 
   double get unitCost => totalPrice / totalUnitsCount;
 
@@ -36,6 +40,8 @@ class ProductAnalysis {
     double? totalUnitsCount,
     Map<String, dynamic>? specificAttributes,
     String? analysisSummary,
+    String? categoryKey,
+    String? canonicalMetric,
   }) {
     return ProductAnalysis(
       id: id ?? this.id,
@@ -45,8 +51,12 @@ class ProductAnalysis {
       totalPrice: totalPrice ?? this.totalPrice,
       primaryUnitName: primaryUnitName ?? this.primaryUnitName,
       totalUnitsCount: totalUnitsCount ?? this.totalUnitsCount,
-      specificAttributes: specificAttributes ?? Map<String, dynamic>.from(this.specificAttributes),
+      specificAttributes:
+          specificAttributes ??
+          Map<String, dynamic>.from(this.specificAttributes),
       analysisSummary: analysisSummary ?? this.analysisSummary,
+      categoryKey: categoryKey ?? this.categoryKey,
+      canonicalMetric: canonicalMetric ?? this.canonicalMetric,
     );
   }
 
@@ -65,7 +75,9 @@ class ProductAnalysis {
         other.primaryUnitName == primaryUnitName &&
         other.totalUnitsCount == totalUnitsCount &&
         other.specificAttributes == specificAttributes &&
-        other.analysisSummary == analysisSummary;
+        other.analysisSummary == analysisSummary &&
+        other.categoryKey == categoryKey &&
+        other.canonicalMetric == canonicalMetric;
   }
 
   @override
@@ -80,6 +92,8 @@ class ProductAnalysis {
       totalUnitsCount,
       Object.hashAll(specificAttributes.entries),
       analysisSummary,
+      categoryKey,
+      canonicalMetric,
     );
   }
 }

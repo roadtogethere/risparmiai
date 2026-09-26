@@ -8,6 +8,7 @@ class CategoryReferenceModel extends CategoryReference {
     required super.primaryUnit,
     required super.averageUnitCost,
     required super.requiredAttributes,
+    super.canonicalMetric,
     super.sumOfUnitCosts = 0,
     super.entriesCount = 0,
   });
@@ -19,6 +20,7 @@ class CategoryReferenceModel extends CategoryReference {
       key: (json['key'] ?? '').toString(),
       displayName: (json['display_name'] ?? '').toString(),
       primaryUnit: (json['primary_unit'] ?? '').toString(),
+      canonicalMetric: json['canonical_metric'] as String?,
       averageUnitCost: (json['average_unit_cost'] is num)
           ? (json['average_unit_cost'] as num).toDouble()
           : double.tryParse(json['average_unit_cost']?.toString() ?? '') ?? 0,
@@ -29,7 +31,9 @@ class CategoryReferenceModel extends CategoryReference {
           ? (json['entries_count'] as num).toInt()
           : int.tryParse(json['entries_count']?.toString() ?? '') ?? 0,
       requiredAttributes: rawRequiredAttributes is List
-          ? rawRequiredAttributes.map(RequiredAttribute.fromJson).toList(growable: false)
+          ? rawRequiredAttributes
+                .map(RequiredAttribute.fromJson)
+                .toList(growable: false)
           : const <RequiredAttribute>[],
     );
   }
@@ -39,6 +43,7 @@ class CategoryReferenceModel extends CategoryReference {
       key: entity.key,
       displayName: entity.displayName,
       primaryUnit: entity.primaryUnit,
+      canonicalMetric: entity.canonicalMetric,
       averageUnitCost: entity.averageUnitCost,
       requiredAttributes: entity.requiredAttributes,
       sumOfUnitCosts: entity.sumOfUnitCosts,
@@ -51,10 +56,13 @@ class CategoryReferenceModel extends CategoryReference {
       'key': key,
       'display_name': displayName,
       'primary_unit': primaryUnit,
+      if (canonicalMetric != null) 'canonical_metric': canonicalMetric,
       'average_unit_cost': averageUnitCost,
       'sum_of_unit_costs': sumOfUnitCosts,
       'entries_count': entriesCount,
-      'required_attributes': requiredAttributes.map((attribute) => attribute.toJson()).toList(growable: false),
+      'required_attributes': requiredAttributes
+          .map((attribute) => attribute.toJson())
+          .toList(growable: false),
     };
   }
 
@@ -62,6 +70,7 @@ class CategoryReferenceModel extends CategoryReference {
     String? key,
     String? displayName,
     String? primaryUnit,
+    String? canonicalMetric,
     double? averageUnitCost,
     double? sumOfUnitCosts,
     int? entriesCount,
@@ -71,6 +80,7 @@ class CategoryReferenceModel extends CategoryReference {
       key: key ?? this.key,
       displayName: displayName ?? this.displayName,
       primaryUnit: primaryUnit ?? this.primaryUnit,
+      canonicalMetric: canonicalMetric ?? this.canonicalMetric,
       averageUnitCost: averageUnitCost ?? this.averageUnitCost,
       sumOfUnitCosts: sumOfUnitCosts ?? this.sumOfUnitCosts,
       entriesCount: entriesCount ?? this.entriesCount,
@@ -87,7 +97,9 @@ class CategoryReferenceModel extends CategoryReference {
     }
 
     final isFirstEntry = entriesCount == 0;
-    final newCheapest = isFirstEntry ? unitCost : (unitCost < averageUnitCost ? unitCost : averageUnitCost);
+    final newCheapest = isFirstEntry
+        ? unitCost
+        : (unitCost < averageUnitCost ? unitCost : averageUnitCost);
 
     return copyWith(
       averageUnitCost: newCheapest,

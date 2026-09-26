@@ -7,6 +7,7 @@ import 'package:risparmiai/savings_checker/data/datasources/category_reference_s
 import 'package:risparmiai/savings_checker/data/datasources/openai_savings_client.dart';
 import 'package:risparmiai/savings_checker/data/models/category_reference_model.dart';
 import 'package:risparmiai/savings_checker/domain/entities/product_analysis.dart';
+import 'package:risparmiai/savings_checker/domain/entities/category_reference.dart';
 import 'package:risparmiai/savings_checker/domain/entities/product_category.dart';
 import 'package:risparmiai/savings_checker/domain/entities/required_attribute.dart';
 import 'package:risparmiai/savings_checker/domain/repositories/savings_repository.dart';
@@ -91,6 +92,60 @@ class SavingsRepositoryImpl implements SavingsRepository {
           const <String, dynamic>{},
     );
 
+    if (matchedCategory == null || matchedCategory['key'] != categoryKey) {
+      throw const CategorySchemaMismatch('Unresolved category identity.');
+    }
+    final knownCategory = categories
+        .where((item) => item.key == categoryKey)
+        .firstOrNull;
+    final proposedCategory = CategoryReferenceModel(
+      key: categoryKey,
+      displayName: _requiredText(
+        matchedCategory['display_name'],
+        'display_name',
+      ),
+      primaryUnit: _requiredText(
+        matchedCategory['primary_unit'],
+        'primary_unit',
+      ),
+      canonicalMetric: matchedCategory['canonical_metric'] as String?,
+      averageUnitCost: 0,
+      requiredAttributes: _readRequiredAttributes(
+        matchedCategory['required_attributes'],
+      ),
+    );
+    final schema = knownCategory ?? proposedCategory;
+    schema.validateSchema(requireCanonicalMetric: knownCategory == null);
+    final observationCanonicalMetric =
+        productData['canonical_metric'] as String?;
+    schema.validateObservation(
+      unit: primaryUnitName,
+      metric: observationCanonicalMetric,
+      attributes: attributes,
+    );
+    if (schema.canonicalMetric != null &&
+        proposedCategory.canonicalMetric != schema.canonicalMetric) {
+      throw const CategorySchemaMismatch(
+        'Conflicting category canonical metric.',
+      );
+    }
+    final localKeys = schema.requiredAttributes.map((a) => a.key).toSet();
+    final proposedKeys = proposedCategory.requiredAttributes
+        .map((a) => a.key)
+        .toSet();
+    final schemaDiverged =
+        knownCategory != null &&
+        (schema.displayName != proposedCategory.displayName ||
+            schema.primaryUnit != proposedCategory.primaryUnit ||
+            localKeys.length != proposedKeys.length ||
+            !localKeys.containsAll(proposedKeys) ||
+            schema.requiredAttributes.any(
+              (local) => !proposedCategory.requiredAttributes.any(
+                (proposed) =>
+                    proposed.key == local.key && proposed.label == local.label,
+              ),
+            ));
+
     final currentUnitCost = totalPrice / totalUnitsCount;
     if (!currentUnitCost.isFinite || (totalPrice > 0 && currentUnitCost <= 0)) {
       throw const FormatException('Invalid unit cost.');
@@ -98,11 +153,13 @@ class SavingsRepositoryImpl implements SavingsRepository {
 
     final product = ProductAnalysis(
       id: 'product_${DateTime.now().microsecondsSinceEpoch}',
-      productName: _defaultProductNameForCategory(category),
+      productName: schema.displayName,
       brand: brand,
       category: category,
       totalPrice: totalPrice,
-      primaryUnitName: primaryUnitName,
+      primaryUnitName: schema.primaryUnit,
+      categoryKey: schema.key,
+      canonicalMetric: schema.canonicalMetric,
       totalUnitsCount: totalUnitsCount,
       specificAttributes: attributes,
     );
@@ -112,21 +169,12 @@ class SavingsRepositoryImpl implements SavingsRepository {
     // osservato contribuisce alla storia della categoria.
     CategoryReferenceModel? updatedCategory;
     if (categoryKey.isNotEmpty && currentUnitCost > 0) {
-      final proposedCategory = CategoryReferenceModel(
-        key: categoryKey,
-        displayName: (matchedCategory?['display_name'] ?? categoryKey)
-            .toString(),
-        primaryUnit: primaryUnitName,
-        averageUnitCost: currentUnitCost,
-        requiredAttributes: _readRequiredAttributes(
-          matchedCategory?['required_attributes'],
-        ),
-      );
-
       await _categoryStore.upsertCategoryWithObservedUnitCost(
         proposedCategory,
         currentUnitCost,
         observationMetric: primaryUnitName,
+        observationCanonicalMetric: observationCanonicalMetric,
+        observedAttributes: attributes,
       );
       final refreshed = await _categoryStore.loadCustomCategories();
       updatedCategory = refreshed
@@ -137,11 +185,20 @@ class SavingsRepositoryImpl implements SavingsRepository {
 
     return <ProductAnalysis>[
       product.copyWith(
-        analysisSummary: _buildAnalysisSummary(
-          primaryUnitName,
-          currentUnitCost,
-          updatedCategory,
-        ),
+        productName: updatedCategory?.displayName ?? schema.displayName,
+        primaryUnitName: updatedCategory?.primaryUnit ?? schema.primaryUnit,
+        analysisSummary:
+            _buildAnalysisSummary(
+              updatedCategory?.primaryUnit ?? schema.primaryUnit,
+              currentUnitCost,
+              updatedCategory,
+            ) +
+            (schemaDiverged
+                ? ' La proposta AI differisce: è stato mantenuto lo schema locale.'
+                : '') +
+            (schema.canonicalMetric == null
+                ? ' Storico legacy: metrica canonica non verificata.'
+                : ''),
       ),
     ];
   }
@@ -171,19 +228,6 @@ class SavingsRepositoryImpl implements SavingsRepository {
         return ProductCategory.beverage;
       default:
         return ProductCategory.other;
-    }
-  }
-
-  String _defaultProductNameForCategory(ProductCategory category) {
-    switch (category) {
-      case ProductCategory.household:
-        return 'Prodotto casa';
-      case ProductCategory.bakery:
-        return 'Pane';
-      case ProductCategory.beverage:
-        return 'Bevanda';
-      default:
-        return 'Prodotto';
     }
   }
 
@@ -228,13 +272,20 @@ class SavingsRepositoryImpl implements SavingsRepository {
     return normalized;
   }
 
-  /// Legge required_attributes accettando sia il nuovo formato {key,label}
-  /// sia semplici stringhe (retrocompatibilità).
+  /// Legge required_attributes nel formato {key,label} normalizzato dal parser.
   List<RequiredAttribute> _readRequiredAttributes(dynamic value) {
     if (value is! List) {
-      return const <RequiredAttribute>[];
+      throw const FormatException('Missing required_attributes list.');
     }
-
+    for (final entry in value) {
+      if (entry is! Map ||
+          entry['key'] is! String ||
+          entry['label'] is! String ||
+          (entry['key'] as String).trim().isEmpty ||
+          (entry['label'] as String).trim().isEmpty) {
+        throw const FormatException('Invalid required attribute definition.');
+      }
+    }
     return value.map(RequiredAttribute.fromJson).toList(growable: false);
   }
 

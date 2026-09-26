@@ -23,11 +23,15 @@ Regole vincolanti:
 9. I campi di categoria in category_match possono includere average_unit_cost ma non calcoli di business nel prodotto.
 10. Ogni voce di required_attributes DEVE essere un oggetto con "key" (snake_case tecnico, es. "sheets_per_roll") e "label" (nome leggibile in italiano per l'utente finale, es. "Fogli per rotolo"). Non restituire mai required_attributes come semplici stringhe.
 11. Rispondi sempre in JSON valido senza testo extra, senza code fence.
+12. category_key identifica la categoria; canonical_metric identifica il denominatore con un codice stabile (sheet, roll, wash, liter, kilogram, gram, milliliter, capsule, slice, bag). primary_unit e primary_unit_name sono etichette leggibili, non identificatori.
+13. Per categorie note riusa key, canonical_metric, primary_unit e required_attributes del catalogo. Non ridefinire lo schema. Nei specific_attributes fornisci i valori richiesti realmente presenti, senza inventarli.
+14. La canonical_metric del prodotto descrive la quantità estratta, anche se incompatibile con la categoria. Non convertirla per adeguarla al catalogo. Per categorie nuove proponi uno schema completo con codice metrica snake_case; per record legacy senza codice non dedurlo dalla label.
 
 Formato richiesto:
 {
   "product": {
     "category_key": "toilet_paper",
+    "canonical_metric": "sheet",
     "brand": "Migliore",
     "total_price": 5.99,
     "units_per_package": 12,
@@ -46,6 +50,7 @@ Formato richiesto:
       "key": "toilet_paper",
       "display_name": "Carta Igienica",
       "primary_unit": "strappo",
+      "canonical_metric": "sheet",
       "average_unit_cost": 0.00185,
       "required_attributes": [
         {"key": "rolls_count", "label": "Numero rotoli"},
@@ -71,12 +76,21 @@ String buildUserPromptWithCatalog(String userPrompt, String? catalogJson) {
 Map<String, dynamic> _normalizeRequiredAttributeEntry(dynamic entry) {
   if (entry is Map) {
     final map = Map<String, dynamic>.from(entry);
+    if (map['key'] is! String ||
+        map['label'] is! String ||
+        (map['key'] as String).trim().isEmpty ||
+        (map['label'] as String).trim().isEmpty) {
+      throw const FormatException('Invalid required attribute.');
+    }
     final key = (map['key'] ?? '').toString();
     final label = (map['label'] ?? '').toString();
     return <String, dynamic>{'key': key, 'label': label.isEmpty ? key : label};
   }
 
-  final key = entry.toString();
+  if (entry is! String || entry.trim().isEmpty) {
+    throw const FormatException('Invalid required attribute.');
+  }
+  final key = entry;
   return <String, dynamic>{'key': key, 'label': key};
 }
 
@@ -176,7 +190,7 @@ class AiResponseParser {
           .map(_normalizeRequiredAttributeEntry)
           .toList(growable: false);
     } else {
-      categoryMap['required_attributes'] = const <Map<String, dynamic>>[];
+      throw const FormatException('Missing required_attributes list.');
     }
 
     final categoryKey = (productMap['category_key'] ?? categoryMap['key'] ?? '')

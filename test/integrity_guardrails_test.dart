@@ -19,6 +19,7 @@ CategoryReferenceModel category([String key = 'sample']) =>
       key: key,
       displayName: 'Sample',
       primaryUnit: 'unit',
+      canonicalMetric: 'unit',
       averageUnitCost: 2,
       requiredAttributes: const [
         RequiredAttribute(key: 'roll_count', label: 'Numero rotoli'),
@@ -31,7 +32,8 @@ Map<String, dynamic> payload() => {
     'total_price': 10,
     'units_per_package': 2,
     'primary_unit_name': 'unit',
-    'specific_attributes': <String, dynamic>{},
+    'canonical_metric': 'unit',
+    'specific_attributes': <String, dynamic>{'roll_count': 2},
   },
   'category_match': {'category': category().toJson()},
 };
@@ -140,6 +142,8 @@ void main() {
           category(),
           3,
           observationMetric: 'unit',
+          observationCanonicalMetric: 'unit',
+          observedAttributes: {'roll_count': 2},
         );
         final original = disk[archiveKey];
         final before = writes;
@@ -258,6 +262,8 @@ void main() {
       category(),
       3,
       observationMetric: 'unit',
+      observationCanonicalMetric: 'unit',
+      observedAttributes: {'roll_count': 2},
     );
     expect((await store.loadCustomCategories()).single.entriesCount, 1);
   });
@@ -276,6 +282,8 @@ void main() {
           category(),
           3,
           observationMetric: 'unit',
+          observationCanonicalMetric: 'unit',
+          observedAttributes: {'roll_count': 2},
         ),
         throwsFormatException,
       );
@@ -285,6 +293,7 @@ void main() {
   }
   test('legacy schema is readable without rewriting aggregates', () async {
     final entry = category().toJson()
+      ..remove('canonical_metric')
       ..remove('sum_of_unit_costs')
       ..remove('entries_count');
     entry['required_attributes'] = ['legacy_attribute'];
@@ -306,6 +315,8 @@ void main() {
         category(),
         3,
         observationMetric: 'unit',
+        observationCanonicalMetric: 'unit',
+        observedAttributes: {'roll_count': 2},
       ),
       throwsFormatException,
     );
@@ -320,6 +331,8 @@ void main() {
           category(),
           3,
           observationMetric: 'unit',
+          observationCanonicalMetric: 'unit',
+          observedAttributes: {'roll_count': 2},
         );
         final original = disk[archiveKey];
         failWrite = !platformError;
@@ -337,6 +350,8 @@ void main() {
           category(),
           2,
           observationMetric: 'unit',
+          observationCanonicalMetric: 'unit',
+          observedAttributes: {'roll_count': 2},
         );
         final saved = (await store.loadCustomCategories()).single;
         expect(saved.entriesCount, 2);
@@ -351,6 +366,8 @@ void main() {
       category(),
       3,
       observationMetric: 'unit',
+      observationCanonicalMetric: 'unit',
+      observedAttributes: {'roll_count': 2},
     );
     await started!.future;
     final other = CategoryReferenceStore(defaultDataSource: Defaults());
@@ -358,11 +375,15 @@ void main() {
       category(),
       2,
       observationMetric: 'unit',
+      observationCanonicalMetric: 'unit',
+      observedAttributes: {'roll_count': 2},
     );
     final third = other.upsertCategoryWithObservedUnitCost(
       category('other'),
       7,
       observationMetric: 'unit',
+      observationCanonicalMetric: 'unit',
+      observedAttributes: {'roll_count': 2},
     );
     await Future<void>.delayed(Duration.zero);
     expect(writes, 1);
@@ -382,6 +403,8 @@ void main() {
       category(),
       3,
       observationMetric: 'unit',
+      observationCanonicalMetric: 'unit',
+      observedAttributes: {'roll_count': 2},
     );
     await started!.future;
     final deletion = store.removeCategory('sample');

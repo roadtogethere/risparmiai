@@ -8,6 +8,11 @@ class UnitMetricMismatch implements Exception {
   final String expectedMetric;
 }
 
+class CategorySchemaMismatch implements Exception {
+  const CategorySchemaMismatch(this.message);
+  final String message;
+}
+
 class CategoryReference {
   const CategoryReference({
     required this.key,
@@ -15,6 +20,7 @@ class CategoryReference {
     required this.primaryUnit,
     required this.averageUnitCost,
     required this.requiredAttributes,
+    this.canonicalMetric,
     this.sumOfUnitCosts = 0,
     this.entriesCount = 0,
   });
@@ -22,6 +28,55 @@ class CategoryReference {
   final String key;
   final String displayName;
   final String primaryUnit;
+  // Null means legacy/unverified: never infer this identifier from a UI label.
+  final String? canonicalMetric;
+
+  void validateSchema({bool requireCanonicalMetric = false}) {
+    if (key.trim().isEmpty ||
+        displayName.trim().isEmpty ||
+        primaryUnit.trim().isEmpty) {
+      throw const FormatException('Incomplete category schema.');
+    }
+    if ((requireCanonicalMetric && canonicalMetric == null) ||
+        (canonicalMetric != null &&
+            !RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(canonicalMetric!))) {
+      throw const FormatException('Invalid canonical metric.');
+    }
+    final keys = <String>{};
+    for (final attribute in requiredAttributes) {
+      if (attribute.key.trim().isEmpty ||
+          attribute.label.trim().isEmpty ||
+          !keys.add(attribute.key)) {
+        throw const FormatException('Invalid required attributes.');
+      }
+    }
+  }
+
+  void validateObservation({
+    required String unit,
+    String? metric,
+    Map<String, dynamic> attributes = const {},
+  }) {
+    if (canonicalMetric != null) {
+      if (metric != canonicalMetric) {
+        throw UnitMetricMismatch(metric ?? unit, canonicalMetric!);
+      }
+    } else {
+      String normalize(String text) =>
+          text.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+      if (normalize(unit) != normalize(primaryUnit)) {
+        throw UnitMetricMismatch(unit, primaryUnit);
+      }
+    }
+    for (final attribute in requiredAttributes) {
+      final value = attributes[attribute.key];
+      if (value == null || (value is String && value.trim().isEmpty)) {
+        throw CategorySchemaMismatch(
+          'Missing required attribute: ${attribute.key}',
+        );
+      }
+    }
+  }
 
   /// Il prezzo unitario più economico trovato finora per questa categoria.
   /// È il valore mostrato come benchmark/"migliore convenienza" in Archivio.
@@ -48,6 +103,7 @@ class CategoryReference {
       key: (json['key'] ?? '').toString(),
       displayName: (json['display_name'] ?? '').toString(),
       primaryUnit: (json['primary_unit'] ?? '').toString(),
+      canonicalMetric: json['canonical_metric'] as String?,
       averageUnitCost: (json['average_unit_cost'] is num)
           ? (json['average_unit_cost'] as num).toDouble()
           : double.tryParse(json['average_unit_cost']?.toString() ?? '') ?? 0,

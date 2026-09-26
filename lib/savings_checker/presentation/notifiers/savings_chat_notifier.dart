@@ -122,6 +122,18 @@ class SavingsChatNotifier extends ChangeNotifier {
           createdAt: DateTime.now(),
         ),
       );
+    } on CategorySchemaMismatch {
+      const message =
+          'Dati incompleti o non coerenti con lo schema della categoria. '
+          'Lo storico non è stato aggiornato.';
+      _errorMessage = message;
+      _messages.add(
+        ChatMessage(
+          sender: ChatMessageSender.assistant,
+          text: message,
+          createdAt: DateTime.now(),
+        ),
+      );
     } catch (error) {
       final friendlyMessage =
           error.toString().contains('Inserisci un elemento da valutare')

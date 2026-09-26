@@ -17,10 +17,29 @@ import 'package:risparmiai/savings_checker/presentation/notifiers/savings_chat_n
 import 'package:risparmiai/savings_checker/presentation/pages/savings_checker_page.dart';
 
 const key = 'user_custom_categories';
+// Explicit test fixture codes, not a production label-to-metric fallback.
+String metricCode(String unit) =>
+    const {
+      'litro': 'liter',
+      'lavaggio': 'wash',
+      'rotolo': 'roll',
+      'strappo': 'sheet',
+      'kg': 'kilogram',
+      'g': 'gram',
+      'ml': 'milliliter',
+      'capsula': 'capsule',
+      'confezione': 'package',
+      'pezzo': 'piece',
+      'unità singola': 'piece',
+      'other': 'piece',
+      'ai proposed unit': 'liter',
+    }[unit.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ')] ??
+    'unknown';
 CategoryReferenceModel category(String unit) => CategoryReferenceModel(
   key: 'sample',
   displayName: 'Original category',
   primaryUnit: unit,
+  canonicalMetric: metricCode(unit),
   averageUnitCost: 9,
   requiredAttributes: const [
     RequiredAttribute(key: 'quantity', label: 'Quantità'),
@@ -42,6 +61,7 @@ Map<String, dynamic> payload() => {
     'total_price': 6,
     'units_per_package': 12,
     'primary_unit_name': 'rotolo',
+    'canonical_metric': 'roll',
     'specific_attributes': {'rolls_count': 12},
   },
   'category_match': {
@@ -49,6 +69,7 @@ Map<String, dynamic> payload() => {
       'key': 'toilet_paper',
       'display_name': 'Carta igienica',
       'primary_unit': 'strappo',
+      'canonical_metric': 'sheet',
       'required_attributes': ['rolls_count', 'sheets_per_roll'],
     },
   },
@@ -73,11 +94,15 @@ void main() {
         category('litro'),
         3,
         observationMetric: 'litro',
+        observationCanonicalMetric: metricCode('litro'),
+        observedAttributes: {'quantity': 1},
       );
       await store.upsertCategoryWithObservedUnitCost(
         category('AI proposed unit'),
         2,
         observationMetric: metric,
+        observationCanonicalMetric: metricCode(metric),
+        observedAttributes: {'quantity': 1},
       );
       final saved = (await store.loadCustomCategories()).single;
       expect(saved.entriesCount, 2);
@@ -96,11 +121,15 @@ void main() {
         category('unità  singola'),
         3,
         observationMetric: 'unità singola',
+        observationCanonicalMetric: metricCode('unità singola'),
+        observedAttributes: {'quantity': 1},
       );
       await store.upsertCategoryWithObservedUnitCost(
         category('other'),
         2,
         observationMetric: ' UNITÀ   SINGOLA ',
+        observationCanonicalMetric: metricCode(' UNITÀ   SINGOLA '),
+        observedAttributes: {'quantity': 1},
       );
       expect(
         (await store.loadCustomCategories()).single.primaryUnit,
@@ -126,6 +155,8 @@ void main() {
           category(pair[0]),
           3,
           observationMetric: pair[0],
+          observationCanonicalMetric: metricCode(pair[0]),
+          observedAttributes: {'quantity': 1},
         );
         final prefs = await SharedPreferences.getInstance();
         final before = prefs.getString(key);
@@ -136,6 +167,8 @@ void main() {
             ).copyWith(displayName: 'AI replacement', requiredAttributes: []),
             1,
             observationMetric: pair[1],
+            observationCanonicalMetric: metricCode(pair[1]),
+            observedAttributes: {'quantity': 1},
           ),
           throwsA(isA<UnitMetricMismatch>()),
         );
@@ -160,6 +193,8 @@ void main() {
           category('rotolo'),
           1,
           observationMetric: 'rotolo',
+          observationCanonicalMetric: metricCode('rotolo'),
+          observedAttributes: {'quantity': 1},
         ),
         throwsA(isA<UnitMetricMismatch>()),
       );
@@ -170,6 +205,8 @@ void main() {
         ).copyWith(displayName: 'AI name', requiredAttributes: []),
         2,
         observationMetric: 'strappo',
+        observationCanonicalMetric: metricCode('strappo'),
+        observedAttributes: {'quantity': 1},
       );
       final saved = (await store.loadCustomCategories()).single;
       expect(saved.displayName, 'Original category');
@@ -188,6 +225,8 @@ void main() {
         category('pezzo'),
         2,
         observationMetric: 'pezzo',
+        observationCanonicalMetric: metricCode('pezzo'),
+        observedAttributes: {'quantity': 1},
       );
       expect((await store.loadCustomCategories()).single.primaryUnit, 'pezzo');
     },
@@ -201,6 +240,8 @@ void main() {
           category('pezzo'),
           2,
           observationMetric: metric,
+          observationCanonicalMetric: metricCode(metric),
+          observedAttributes: {'quantity': 1},
         ),
         throwsFormatException,
       );
@@ -215,6 +256,8 @@ void main() {
         category('strappo'),
         2,
         observationMetric: 'rotolo',
+        observationCanonicalMetric: metricCode('rotolo'),
+        observedAttributes: {'quantity': 1},
       ),
       throwsA(isA<UnitMetricMismatch>()),
     );
@@ -230,12 +273,16 @@ void main() {
         category('litro'),
         3,
         observationMetric: 'litro',
+        observationCanonicalMetric: metricCode('litro'),
+        observedAttributes: {'quantity': 1},
       );
       final b = expectLater(
         second.upsertCategoryWithObservedUnitCost(
           category('lavaggio'),
           2,
           observationMetric: 'lavaggio',
+          observationCanonicalMetric: metricCode('lavaggio'),
+          observedAttributes: {'quantity': 1},
         ),
         throwsA(isA<UnitMetricMismatch>()),
       );
@@ -250,6 +297,7 @@ void main() {
     'legacy custom definition remains authoritative and is not migrated',
     () async {
       final legacy = category('lavaggio').toJson()
+        ..remove('canonical_metric')
         ..remove('sum_of_unit_costs')
         ..remove('entries_count');
       final raw = jsonEncode([legacy]);
@@ -262,6 +310,8 @@ void main() {
           category('litro'),
           2,
           observationMetric: 'litro',
+          observationCanonicalMetric: metricCode('litro'),
+          observedAttributes: {'quantity': 1},
         ),
         throwsA(isA<UnitMetricMismatch>()),
       );

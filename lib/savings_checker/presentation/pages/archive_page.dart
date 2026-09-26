@@ -238,6 +238,8 @@ class _ArchiveEntryCard extends StatelessWidget {
                   : 'Prima rilevazione salvata per questa categoria.',
               style: const TextStyle(fontSize: 13, color: Color(0xFF868E96)),
             ),
+            if (category.canonicalMetric == null)
+              const Text('Schema legacy: metrica canonica non verificata.'),
             if (category.requiredAttributes.isNotEmpty) ...<Widget>[
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 10),

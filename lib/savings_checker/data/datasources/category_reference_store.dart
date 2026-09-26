@@ -105,6 +105,7 @@ class CategoryReferenceStore {
         throw const FormatException('Invalid category attributes.');
       }
       final category = CategoryReferenceModel.fromJson(entry);
+      if (category.canonicalMetric != null) category.validateSchema();
       if (!keys.add(category.key)) {
         throw const FormatException('Duplicate category archive key.');
       }
@@ -120,6 +121,8 @@ class CategoryReferenceStore {
     CategoryReferenceModel incoming,
     double observedUnitCost, {
     required String observationMetric,
+    String? observationCanonicalMetric,
+    Map<String, dynamic> observedAttributes = const {},
   }) => _serializeWrite(() async {
     final metric = _normalizeMetric(observationMetric);
     if (!observedUnitCost.isFinite ||
@@ -148,9 +151,20 @@ class CategoryReferenceStore {
         }
       }
     }
-    final expectedMetric = reference?.primaryUnit ?? incoming.primaryUnit;
-    if (metric != _normalizeMetric(expectedMetric)) {
-      throw UnitMetricMismatch(observationMetric, expectedMetric);
+    final schema = reference ?? incoming;
+    schema.validateSchema(requireCanonicalMetric: reference == null);
+    schema.validateObservation(
+      unit: observationMetric,
+      metric: observationCanonicalMetric,
+      attributes: observedAttributes,
+    );
+    if (schema.canonicalMetric != null) {
+      if (incoming.canonicalMetric != null &&
+          incoming.canonicalMetric != schema.canonicalMetric) {
+        throw const CategorySchemaMismatch(
+          'Conflicting category canonical metric.',
+        );
+      }
     }
 
     if (existingIndex >= 0) {

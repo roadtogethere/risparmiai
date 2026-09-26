@@ -12,6 +12,8 @@ class ProductAnalysisModel extends ProductAnalysis {
     required super.totalUnitsCount,
     required super.specificAttributes,
     super.analysisSummary,
+    super.categoryKey,
+    super.canonicalMetric,
   });
 
   factory ProductAnalysisModel.fromJson(Map<String, dynamic> json) {
@@ -55,6 +57,8 @@ class ProductAnalysisModel extends ProductAnalysis {
       totalUnitsCount: totalUnitsCount,
       specificAttributes: specificAttributes,
       analysisSummary: json['analysisSummary'] as String?,
+      categoryKey: json['categoryKey'] as String?,
+      canonicalMetric: json['canonicalMetric'] as String?,
     );
   }
 
@@ -69,6 +73,8 @@ class ProductAnalysisModel extends ProductAnalysis {
       'totalUnitsCount': totalUnitsCount,
       'specificAttributes': specificAttributes,
       if (analysisSummary != null) 'analysisSummary': analysisSummary,
+      if (categoryKey != null) 'categoryKey': categoryKey,
+      if (canonicalMetric != null) 'canonicalMetric': canonicalMetric,
     };
   }
 

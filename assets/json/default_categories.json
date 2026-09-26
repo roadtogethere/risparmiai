@@ -4,6 +4,7 @@
       "key": "toilet_paper",
       "display_name": "Carta Igienica",
       "primary_unit": "strappo",
+      "canonical_metric": "sheet",
       "average_unit_cost": 0.0035,
       "required_attributes": ["rolls_count", "sheets_per_roll"]
     },
@@ -11,6 +12,7 @@
       "key": "dishwasher_tabs",
       "display_name": "Pastiglie Lavastoviglie",
       "primary_unit": "capsula",
+      "canonical_metric": "capsule",
       "average_unit_cost": 0.18,
       "required_attributes": ["tabs_count"]
     },
@@ -18,6 +20,7 @@
       "key": "laundry_detergent_liquid",
       "display_name": "Detersivo Liquido Lavatrice",
       "primary_unit": "lavaggio",
+      "canonical_metric": "wash",
       "average_unit_cost": 0.15,
       "required_attributes": ["total_liters", "total_washes"]
     },
@@ -25,6 +28,7 @@
       "key": "dishwasher_detergent_liquid",
       "display_name": "Detersivo Liquido Lavastoviglie",
       "primary_unit": "lavaggio",
+      "canonical_metric": "wash",
       "average_unit_cost": 0.12,
       "required_attributes": ["total_ml", "total_washes"]
     },
@@ -32,6 +36,7 @@
       "key": "kitchen_paper",
       "display_name": "Carta Casa / Scottex",
       "primary_unit": "strappo",
+      "canonical_metric": "sheet",
       "average_unit_cost": 0.008,
       "required_attributes": ["rolls_count", "sheets_per_roll"]
     },
@@ -39,6 +44,7 @@
       "key": "coffee_capsules",
       "display_name": "Capsule Caffè",
       "primary_unit": "capsula",
+      "canonical_metric": "capsule",
       "average_unit_cost": 0.22,
       "required_attributes": ["capsules_count"]
     },
@@ -46,6 +52,7 @@
       "key": "trash_bags",
       "display_name": "Sacchetti Spazzatura",
       "primary_unit": "sacchetto",
+      "canonical_metric": "bag",
       "average_unit_cost": 0.10,
       "required_attributes": ["bags_count", "capacity_liters"]
     },
@@ -53,6 +60,7 @@
       "key": "sliced_bread",
       "display_name": "Pane a fette / Pan Bauletto",
       "primary_unit": "fetta",
+      "canonical_metric": "slice",
       "average_unit_cost": 0.06,
       "required_attributes": ["total_grams", "slices_count"]
     },
@@ -60,6 +68,7 @@
       "key": "olive_oil",
       "display_name": "Olio Extravergine d'Oliva",
       "primary_unit": "litro",
+      "canonical_metric": "liter",
       "average_unit_cost": 8.50,
       "required_attributes": ["total_liters"]
     },
@@ -67,6 +76,7 @@
       "key": "uht_milk",
       "display_name": "Latte UHT",
       "primary_unit": "litro",
+      "canonical_metric": "liter",
       "average_unit_cost": 1.15,
       "required_attributes": ["total_liters"]
     }
