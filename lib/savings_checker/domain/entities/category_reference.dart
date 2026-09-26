@@ -1,5 +1,13 @@
 import 'required_attribute.dart';
 
+/// A valid observation cannot be aggregated under a different denominator.
+class UnitMetricMismatch implements Exception {
+  const UnitMetricMismatch(this.observationMetric, this.expectedMetric);
+
+  final String observationMetric;
+  final String expectedMetric;
+}
+
 class CategoryReference {
   const CategoryReference({
     required this.key,
@@ -30,7 +38,8 @@ class CategoryReference {
 
   /// Media di tutti i prezzi unitari visti finora per questa categoria.
   /// Ricade sul prezzo più economico se non ci sono ancora dati storici.
-  double get averageOfAllEntries => entriesCount > 0 ? sumOfUnitCosts / entriesCount : averageUnitCost;
+  double get averageOfAllEntries =>
+      entriesCount > 0 ? sumOfUnitCosts / entriesCount : averageUnitCost;
 
   factory CategoryReference.fromJson(Map<String, dynamic> json) {
     final rawRequiredAttributes = json['required_attributes'];
@@ -49,7 +58,9 @@ class CategoryReference {
           ? (json['entries_count'] as num).toInt()
           : int.tryParse(json['entries_count']?.toString() ?? '') ?? 0,
       requiredAttributes: rawRequiredAttributes is List
-          ? rawRequiredAttributes.map(RequiredAttribute.fromJson).toList(growable: false)
+          ? rawRequiredAttributes
+                .map(RequiredAttribute.fromJson)
+                .toList(growable: false)
           : const <RequiredAttribute>[],
     );
   }

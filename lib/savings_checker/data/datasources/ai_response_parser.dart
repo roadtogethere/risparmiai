@@ -17,7 +17,7 @@ Regole vincolanti:
 3. specific_attributes contiene solo valori verificabili dal testo, mai valori inventati o precalcolati.
 4. Se l'utente fornisce dati specifici (ad esempio sheets_per_roll: 500), non sostituirli mai con valori inventati.
 5. Sii tollerante a refusi comuni: stramppi, rotolii, litrii, igenicaa, ecc.
-6. Se la categoria è "toilet_paper" (o equivalente), primary_unit_name DEVE essere sempre "strappo".
+6. primary_unit_name deve descrivere il denominatore effettivamente estratto. Non cambiare unità per adeguarla al catalogo: se sono disponibili solo rotoli, mantieni rotolo; non inventare fogli per rotolo.
 7. Generalizza in modo aggressivo per prodotti dello stesso tipo di uso quotidiano: prodotti equivalenti vanno nella stessa categoria.
 8. Se non esiste una categoria plausibile, crea una nuova categoria con key semplice in snake_case, ad esempio pet_food, cleaning_product, milk, bread.
 9. I campi di categoria in category_match possono includere average_unit_cost ma non calcoli di business nel prodotto.
@@ -73,10 +73,7 @@ Map<String, dynamic> _normalizeRequiredAttributeEntry(dynamic entry) {
     final map = Map<String, dynamic>.from(entry);
     final key = (map['key'] ?? '').toString();
     final label = (map['label'] ?? '').toString();
-    return <String, dynamic>{
-      'key': key,
-      'label': label.isEmpty ? key : label,
-    };
+    return <String, dynamic>{'key': key, 'label': label.isEmpty ? key : label};
   }
 
   final key = entry.toString();
@@ -96,7 +93,10 @@ class AiResponseParser {
     }
 
     String jsonText = trimmed;
-    final codeFenceMatch = RegExp(r'```(?:json)?\s*(.*?)\s*```', dotAll: true).firstMatch(trimmed);
+    final codeFenceMatch = RegExp(
+      r'```(?:json)?\s*(.*?)\s*```',
+      dotAll: true,
+    ).firstMatch(trimmed);
     if (codeFenceMatch != null) {
       jsonText = codeFenceMatch.group(1) ?? trimmed;
     }
@@ -114,18 +114,28 @@ class AiResponseParser {
     }
 
     if (categoryMatch is! Map) {
-      throw const FormatException('AI response is missing the category_match object.');
+      throw const FormatException(
+        'AI response is missing the category_match object.',
+      );
     }
 
-    final productMap = Map<String, dynamic>.from(product as Map<dynamic, dynamic>);
-    final categoryMatchMap = Map<String, dynamic>.from(categoryMatch as Map<dynamic, dynamic>);
+    final productMap = Map<String, dynamic>.from(
+      product as Map<dynamic, dynamic>,
+    );
+    final categoryMatchMap = Map<String, dynamic>.from(
+      categoryMatch as Map<dynamic, dynamic>,
+    );
     final categoryInfo = categoryMatchMap['category'];
 
     if (categoryInfo is! Map) {
-      throw const FormatException('AI response is missing category_match.category.');
+      throw const FormatException(
+        'AI response is missing category_match.category.',
+      );
     }
 
-    final categoryMap = Map<String, dynamic>.from(categoryInfo as Map<dynamic, dynamic>);
+    final categoryMap = Map<String, dynamic>.from(
+      categoryInfo as Map<dynamic, dynamic>,
+    );
 
     final requiredProductKeys = <String>{
       'category_key',
@@ -135,15 +145,26 @@ class AiResponseParser {
       'primary_unit_name',
       'specific_attributes',
     };
-    final missingProductKeys = requiredProductKeys.difference(productMap.keys.toSet());
+    final missingProductKeys = requiredProductKeys.difference(
+      productMap.keys.toSet(),
+    );
     if (missingProductKeys.isNotEmpty) {
-      throw FormatException('AI response is missing required product fields: ${missingProductKeys.join(', ')}');
+      throw FormatException(
+        'AI response is missing required product fields: ${missingProductKeys.join(', ')}',
+      );
     }
 
-    final businessFields = <String>{'unitCost', 'savings', 'averageUnitCost', 'comparison'};
+    final businessFields = <String>{
+      'unitCost',
+      'savings',
+      'averageUnitCost',
+      'comparison',
+    };
     for (final businessField in businessFields) {
       if (productMap.containsKey(businessField)) {
-        throw FormatException('AI response included business field: $businessField');
+        throw FormatException(
+          'AI response included business field: $businessField',
+        );
       }
     }
 
@@ -151,20 +172,19 @@ class AiResponseParser {
     // anche stringhe semplici per retrocompatibilità.
     final rawRequiredAttributes = categoryMap['required_attributes'];
     if (rawRequiredAttributes is List) {
-      categoryMap['required_attributes'] = rawRequiredAttributes.map(_normalizeRequiredAttributeEntry).toList(growable: false);
+      categoryMap['required_attributes'] = rawRequiredAttributes
+          .map(_normalizeRequiredAttributeEntry)
+          .toList(growable: false);
     } else {
       categoryMap['required_attributes'] = const <Map<String, dynamic>>[];
     }
 
-    final categoryKey = (productMap['category_key'] ?? categoryMap['key'] ?? '').toString();
-    if (categoryKey == 'toilet_paper' || categoryMap['key'] == 'toilet_paper') {
-      productMap['primary_unit_name'] = 'strappo';
-      categoryMap['primary_unit'] = 'strappo';
-      categoryMap['key'] = 'toilet_paper';
-    }
-
+    final categoryKey = (productMap['category_key'] ?? categoryMap['key'] ?? '')
+        .toString();
     categoryMatchMap['category'] = categoryMap;
-    productMap['category_key'] = categoryKey.isEmpty ? (categoryMap['key'] ?? '').toString() : categoryKey;
+    productMap['category_key'] = categoryKey.isEmpty
+        ? (categoryMap['key'] ?? '').toString()
+        : categoryKey;
 
     return <String, dynamic>{
       'product': productMap,

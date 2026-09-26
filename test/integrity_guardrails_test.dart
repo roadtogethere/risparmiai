@@ -136,7 +136,11 @@ void main() {
     for (var i = 0; i < values.length; i++) {
       final value = values[i];
       test('invalid $field case $i never mutates history', () async {
-        await store.upsertCategoryWithObservedUnitCost(category(), 3);
+        await store.upsertCategoryWithObservedUnitCost(
+          category(),
+          3,
+          observationMetric: 'unit',
+        );
         final original = disk[archiveKey];
         final before = writes;
         final data = payload();
@@ -250,7 +254,11 @@ void main() {
   test('missing archive and empty list allow upsert', () async {
     expect(await store.loadCustomCategories(), isEmpty);
     disk[archiveKey] = '[]';
-    await store.upsertCategoryWithObservedUnitCost(category(), 3);
+    await store.upsertCategoryWithObservedUnitCost(
+      category(),
+      3,
+      observationMetric: 'unit',
+    );
     expect((await store.loadCustomCategories()).single.entriesCount, 1);
   });
   for (final corrupt in [
@@ -264,7 +272,11 @@ void main() {
     test('corrupt archive $corrupt stays untouched', () async {
       disk[archiveKey] = corrupt;
       await expectLater(
-        store.upsertCategoryWithObservedUnitCost(category(), 3),
+        store.upsertCategoryWithObservedUnitCost(
+          category(),
+          3,
+          observationMetric: 'unit',
+        ),
         throwsFormatException,
       );
       expect(disk[archiveKey], corrupt);
@@ -290,7 +302,11 @@ void main() {
     disk[archiveKey] = jsonEncode([entry]);
     final original = disk[archiveKey];
     await expectLater(
-      store.upsertCategoryWithObservedUnitCost(category(), 3),
+      store.upsertCategoryWithObservedUnitCost(
+        category(),
+        3,
+        observationMetric: 'unit',
+      ),
       throwsFormatException,
     );
     expect(disk[archiveKey], original);
@@ -300,7 +316,11 @@ void main() {
     test(
       'write failure $platformError propagates and queue/cache recover',
       () async {
-        await store.upsertCategoryWithObservedUnitCost(category(), 3);
+        await store.upsertCategoryWithObservedUnitCost(
+          category(),
+          3,
+          observationMetric: 'unit',
+        );
         final original = disk[archiveKey];
         failWrite = !platformError;
         throwWrite = platformError;
@@ -313,7 +333,11 @@ void main() {
         expect(disk[archiveKey], original);
         failWrite = false;
         throwWrite = false;
-        await store.upsertCategoryWithObservedUnitCost(category(), 2);
+        await store.upsertCategoryWithObservedUnitCost(
+          category(),
+          2,
+          observationMetric: 'unit',
+        );
         final saved = (await store.loadCustomCategories()).single;
         expect(saved.entriesCount, 2);
         expect(saved.sumOfUnitCosts, 5);
@@ -323,13 +347,22 @@ void main() {
   test('concurrent upserts across instances preserve every update', () async {
     started = Completer<void>();
     release = Completer<void>();
-    final first = store.upsertCategoryWithObservedUnitCost(category(), 3);
+    final first = store.upsertCategoryWithObservedUnitCost(
+      category(),
+      3,
+      observationMetric: 'unit',
+    );
     await started!.future;
     final other = CategoryReferenceStore(defaultDataSource: Defaults());
-    final second = other.upsertCategoryWithObservedUnitCost(category(), 2);
+    final second = other.upsertCategoryWithObservedUnitCost(
+      category(),
+      2,
+      observationMetric: 'unit',
+    );
     final third = other.upsertCategoryWithObservedUnitCost(
       category('other'),
       7,
+      observationMetric: 'unit',
     );
     await Future<void>.delayed(Duration.zero);
     expect(writes, 1);
@@ -345,7 +378,11 @@ void main() {
   test('delete waits for the in-flight upsert', () async {
     started = Completer<void>();
     release = Completer<void>();
-    final first = store.upsertCategoryWithObservedUnitCost(category(), 3);
+    final first = store.upsertCategoryWithObservedUnitCost(
+      category(),
+      3,
+      observationMetric: 'unit',
+    );
     await started!.future;
     final deletion = store.removeCategory('sample');
     release!.complete();

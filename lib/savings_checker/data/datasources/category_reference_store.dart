@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'category_reference_data_source.dart';
 import '../models/category_reference_model.dart';
+import '../../domain/entities/category_reference.dart';
 
 /// Gestisce la persistenza locale delle categorie "custom" (create o
 /// aggiornate a runtime, es. dall'AI o da nuovi prodotti analizzati),
@@ -117,10 +118,13 @@ class CategoryReferenceStore {
   /// prezzo più economico e la media storica, altrimenti la crea da zero.
   Future<void> upsertCategoryWithObservedUnitCost(
     CategoryReferenceModel incoming,
-    double observedUnitCost,
-  ) => _serializeWrite(() async {
+    double observedUnitCost, {
+    required String observationMetric,
+  }) => _serializeWrite(() async {
+    final metric = _normalizeMetric(observationMetric);
     if (!observedUnitCost.isFinite ||
         observedUnitCost <= 0 ||
+        metric.isEmpty ||
         incoming.key.trim().isEmpty ||
         incoming.displayName.trim().isEmpty ||
         incoming.primaryUnit.trim().isEmpty) {
@@ -131,18 +135,41 @@ class CategoryReferenceStore {
       (category) => category.key == incoming.key,
     );
 
+    // Resolve under the write lock: a concurrent first observation may have
+    // established the category since the repository last loaded the catalog.
+    CategoryReferenceModel? reference;
+    if (existingIndex >= 0) {
+      reference = custom[existingIndex];
+    } else {
+      for (final category in await _defaultDataSource.loadDefaultCategories()) {
+        if (category.key == incoming.key) {
+          reference = category;
+          break;
+        }
+      }
+    }
+    final expectedMetric = reference?.primaryUnit ?? incoming.primaryUnit;
+    if (metric != _normalizeMetric(expectedMetric)) {
+      throw UnitMetricMismatch(observationMetric, expectedMetric);
+    }
+
     if (existingIndex >= 0) {
       custom[existingIndex] = custom[existingIndex].withNewObservedUnitCost(
         observedUnitCost,
       );
     } else {
-      // Prima volta per questa key: si parte dai dati proposti (es. dall'AI)
-      // e si registra subito il primo prezzo osservato.
-      custom.add(incoming.withNewObservedUnitCost(observedUnitCost));
+      // Preserve a known default definition; use the AI proposal only when
+      // the category is genuinely new. Record the first observed price.
+      custom.add(
+        (reference ?? incoming).withNewObservedUnitCost(observedUnitCost),
+      );
     }
 
     await _saveCustomCategories(custom);
   });
+
+  static String _normalizeMetric(String value) =>
+      value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
   /// Rimuove una categoria custom (non tocca mai i default).
   Future<void> removeCategory(String key) => _serializeWrite(() async {

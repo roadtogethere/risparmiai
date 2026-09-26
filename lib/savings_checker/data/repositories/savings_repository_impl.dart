@@ -126,6 +126,7 @@ class SavingsRepositoryImpl implements SavingsRepository {
       await _categoryStore.upsertCategoryWithObservedUnitCost(
         proposedCategory,
         currentUnitCost,
+        observationMetric: primaryUnitName,
       );
       final refreshed = await _categoryStore.loadCustomCategories();
       updatedCategory = refreshed

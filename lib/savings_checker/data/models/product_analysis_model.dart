@@ -15,7 +15,8 @@ class ProductAnalysisModel extends ProductAnalysis {
   });
 
   factory ProductAnalysisModel.fromJson(Map<String, dynamic> json) {
-    final rawCategory = json['category'] ?? json['productCategory'] ?? json['categoryKey'];
+    final rawCategory =
+        json['category'] ?? json['productCategory'] ?? json['categoryKey'];
     final category = _parseCategory(rawCategory);
 
     final rawSpecificAttributes = json['specificAttributes'];
@@ -41,8 +42,12 @@ class ProductAnalysisModel extends ProductAnalysis {
     );
 
     return ProductAnalysisModel(
-      id: (json['id'] ?? json['productId'] ?? _generateIdFromBrand(json)).toString(),
-      productName: _stringFromJson(json['productName'] ?? json['name'], fallback: 'Prodotto sconosciuto'),
+      id: (json['id'] ?? json['productId'] ?? _generateIdFromBrand(json))
+          .toString(),
+      productName: _stringFromJson(
+        json['productName'] ?? json['name'],
+        fallback: 'Prodotto sconosciuto',
+      ),
       brand: _stringFromJson(json['brand'], fallback: 'Brand sconosciuto'),
       category: category,
       totalPrice: _doubleFromJson(json['totalPrice'], fallback: 0),
@@ -102,21 +107,10 @@ class ProductAnalysisModel extends ProductAnalysis {
     required ProductCategory category,
     required Map<String, dynamic> specificAttributes,
   }) {
-    final rawUnit = (json['primaryUnitName'] ?? json['unitName'] ?? '').toString().trim();
+    final rawUnit = (json['primaryUnitName'] ?? json['unitName'] ?? '')
+        .toString()
+        .trim();
     final normalizedUnit = rawUnit.isEmpty ? '' : rawUnit.toLowerCase();
-    final productName = (json['productName'] ?? json['name'] ?? '').toString().toLowerCase();
-    final hasToiletPaperKeywords = productName.contains('carta') && productName.contains('igienica') ||
-        productName.contains('toilet') && productName.contains('paper') ||
-        productName.contains('igienica');
-    final hasSheetsPerRoll = specificAttributes.containsKey('sheetsPerRoll') ||
-        specificAttributes.containsKey('sheets_per_roll') ||
-        specificAttributes.containsKey('rollsCount') ||
-        specificAttributes.containsKey('rolls_count');
-
-    if (hasToiletPaperKeywords || (hasSheetsPerRoll && normalizedUnit.isEmpty)) {
-      return 'strappo';
-    }
-
     switch (normalizedUnit) {
       case 'strappo':
       case 'strappi':
@@ -148,10 +142,6 @@ class ProductAnalysisModel extends ProductAnalysis {
       case 'sacchetti':
         return 'sacchetto';
       default:
-        if (specificAttributes.containsKey('sheetsPerRoll') ||
-            specificAttributes.containsKey('sheets_per_roll')) {
-          return 'strappo';
-        }
         return rawUnit.isEmpty ? 'unità' : rawUnit;
     }
   }
@@ -163,7 +153,9 @@ class ProductAnalysisModel extends ProductAnalysis {
     required String primaryUnitName,
   }) {
     final explicitCount = _doubleFromJson(
-      json['totalUnitsCount'] ?? json['unitsCount'] ?? json['total_units_count'],
+      json['totalUnitsCount'] ??
+          json['unitsCount'] ??
+          json['total_units_count'],
       fallback: -1,
     );
     if (explicitCount > 0) {
@@ -171,11 +163,17 @@ class ProductAnalysisModel extends ProductAnalysis {
     }
 
     final rolls = _doubleFromJson(
-      json['rollsCount'] ?? json['rolls_count'] ?? json['piecesCount'] ?? json['pieces_count'],
+      json['rollsCount'] ??
+          json['rolls_count'] ??
+          json['piecesCount'] ??
+          json['pieces_count'],
       fallback: 0,
     );
     final sheetsPerRoll = _doubleFromJson(
-      json['sheetsPerRoll'] ?? json['sheets_per_roll'] ?? json['strappiPerRotolo'] ?? json['strappi_per_rotolo'],
+      json['sheetsPerRoll'] ??
+          json['sheets_per_roll'] ??
+          json['strappiPerRotolo'] ??
+          json['strappi_per_rotolo'],
       fallback: 0,
     );
 
@@ -186,7 +184,8 @@ class ProductAnalysisModel extends ProductAnalysis {
     }
 
     final totalAttribute = _doubleFromJson(
-      specificAttributes['totalUnitsCount'] ?? specificAttributes['total_units_count'],
+      specificAttributes['totalUnitsCount'] ??
+          specificAttributes['total_units_count'],
       fallback: 0,
     );
     if (totalAttribute > 0) {
@@ -236,6 +235,8 @@ class ProductAnalysisModel extends ProductAnalysis {
   static String _generateIdFromBrand(Map<String, dynamic> json) {
     final name = json['productName'] ?? json['name'] ?? 'product';
     final brand = json['brand'] ?? 'brand';
-    return '${brand}_${name}_${DateTime.now().microsecondsSinceEpoch}'.replaceAll(' ', '_').toLowerCase();
+    return '${brand}_${name}_${DateTime.now().microsecondsSinceEpoch}'
+        .replaceAll(' ', '_')
+        .toLowerCase();
   }
 }

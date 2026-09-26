@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../domain/entities/product_analysis.dart';
+import '../../domain/entities/category_reference.dart';
 import '../../domain/repositories/savings_repository.dart';
 import '../models/chat_message.dart';
 
@@ -105,6 +106,19 @@ class SavingsChatNotifier extends ChangeNotifier {
         ChatMessage(
           sender: ChatMessageSender.assistant,
           text: summary,
+          createdAt: DateTime.now(),
+        ),
+      );
+    } on UnitMetricMismatch {
+      const message =
+          'Dati del prodotto riconosciuti, ma non confrontabili con '
+          'lo storico della categoria usando la stessa unità. '
+          'Lo storico non è stato aggiornato.';
+      _errorMessage = message;
+      _messages.add(
+        ChatMessage(
+          sender: ChatMessageSender.assistant,
+          text: message,
           createdAt: DateTime.now(),
         ),
       );
