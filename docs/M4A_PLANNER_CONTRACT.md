@@ -1,5 +1,9 @@
 # M4A — Planner e quantità comparabile
 
+Questo documento descrive M4A e, nella sezione finale, le estensioni M4B.
+I limiti storici di M4A sulla sola quantità sono superati dal percorso M4B
+descritto sotto; il contratto AI rimane invariato.
+
 ## Percorso attivo
 
 `MainApp` collega i provider reali a `QuantityPlannerRepositoryImpl` tramite
@@ -170,3 +174,50 @@ reali, con credenziali locali da ambiente o `.env`. Verifica il dialogo
 "carta igienica 12 rotolo 5 euro 3 veli" → "500" → correzione del prezzo,
 conservando tutti i fatti e senza scritture economiche. I provider privi di
 credenziali vengono saltati; nessuna credenziale o risposta grezza viene stampata.
+
+## Estensione M4B — costo, confronto e salvataggio esplicito
+
+Il notifier costruisce `ComparablePrice` dalla quantità rivalidata in Dart.
+Il costo è `totalPrice / quantity`, mantenuto come double non arrotondato;
+soltanto la presentazione formatta i numeri. Il prezzo zero resta analizzabile
+ma non salvabile. Prezzo e operandi devono avere provenienza ammessa da M4A.
+
+`PriceComparisonService` usa uno snapshot dei soli prezzi salvati in
+`verified_price_observations_v1`, con stessa categoria e metrica. Gli aggregati
+legacy e M3 non partecipano e non vengono migrati. La prima analisi ha costo
+disponibile e giudizio assente. Il confronto distingue nuovo minimo potenziale,
+pareggio col minimo, prezzo sotto/pari/sopra la media. Le differenze sono
+`corrente - riferimento`, quelle percentuali dividono per il riferimento
+positivo. Si usano valori interni, senza soglie commerciali o arrotondamenti
+per decidere il pareggio. La media dà lo stesso peso a ogni osservazione.
+Percentuali non rappresentabili come double finito restano indisponibili.
+
+Solo «Salva questo prezzo» chiama lo store. Il risultato e lo snapshot
+precedente rimangono visibili dopo il salvataggio, senza autoriferimento.
+Il pulsante non registra acquisti. I prezzi si consultano nella nuova vista
+«Prezzi salvati»; l'archivio precedente resta separato e accessibile.
+
+L'identità locale usa 128 bit casuali e ogni turno incrementa una revisione.
+Prima del salvataggio le correzioni non scrivono dati. Dopo il salvataggio
+producono una revisione non salvata della stessa analisi: il record precedente
+rimane immutato. L'utente può salvare la nuova osservazione esplicitamente.
+Una revisione ripetuta è idempotente; stessa analisi, prezzo, quantità, categoria
+e metrica già salvati non generano un duplicato nemmeno con revisione diversa.
+Queste ripetizioni sono escluse anche dal proprio confronto. Una nuova analisi
+può invece registrare deliberatamente un'altra osservazione dello stesso prezzo.
+
+Lo store salva schema, fatti, operazione e risultato in un unico documento
+SharedPreferences. Le scritture sono serializzate fra istanze nello stesso
+isolate; rilettura da disco, controllo schema e deduplicazione avvengono nella
+coda. Ogni lettura rivalida fatti e calcolo, senza fidarsi di un costo serializzato.
+Errori o dati corrotti non azzerano l'archivio; un retry non duplica una scrittura
+la cui conferma sia andata persa. Non è una transazione multiprocesso né una
+garanzia di durabilità in caso di crash fornita da un database.
+
+Gli schemi allegati alle osservazioni esplicitamente salvate vengono riutilizzati
+anche dopo il riavvio; l'autorità del catalogo locale resta invariata.
+Il percorso legacy/demo e i suoi aggregati non sono stati modificati.
+
+Copertura: `price_history_test.dart` per matematica, snapshot, provenienza,
+correzioni e UI; `verified_price_persistence_test.dart` per scritture fallite,
+cache e conferme perse. I test live AI restano opt-in.

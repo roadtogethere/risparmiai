@@ -652,11 +652,10 @@ void main() {
         isNull,
       );
       client.responses.add(completed);
-      final repeated = await repo.analyzeTurn(
-        '500',
-        previous: notifier.plannerAnalysis,
+      final repeated = await tester.runAsync(
+        () => repo.analyzeTurn('500', previous: notifier.plannerAnalysis),
       );
-      expect(repeated.id, id);
+      expect(repeated!.id, id);
       expect(repeated.result.quantity, 6000);
       expect(
         (await SharedPreferences.getInstance()).getString(

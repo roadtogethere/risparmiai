@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import '../../domain/entities/category_reference.dart';
 import '../../domain/entities/quantity_plan.dart';
@@ -7,8 +8,9 @@ import '../../domain/services/comparable_quantity_resolver.dart';
 import '../datasources/ai_savings_client.dart';
 import '../datasources/category_reference_store.dart';
 import '../models/quantity_plan_parser.dart';
+import '../datasources/verified_price_store.dart';
 
-/// M4A path: read-only access to historical storage. New schemas are session-local.
+/// Analysis only reads storage. Economic observations require an explicit save.
 class QuantityPlannerRepositoryImpl implements QuantityPlannerRepository {
   QuantityPlannerRepositoryImpl({
     required this.aiClient,
@@ -17,7 +19,13 @@ class QuantityPlannerRepositoryImpl implements QuantityPlannerRepository {
   final AiSavingsClient? aiClient;
   final CategoryReferenceStore _store;
   final Map<String, CategoryReference> _sessionSchemas = {};
-  static int _nextId = 0;
+  static String _newId() {
+    final random = Random.secure();
+    return List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+  }
 
   @override
   Future<PlannerAnalysis> analyzeTurn(
@@ -32,6 +40,13 @@ class QuantityPlannerRepositoryImpl implements QuantityPlannerRepository {
       for (final category in await _store.loadCategories())
         category.key: category,
     };
+    // Reuse schemas attached to explicitly saved verified observations after restart.
+    for (final saved in await const VerifiedPriceStore().read()) {
+      categories.putIfAbsent(
+        saved.price.categoryKey,
+        () => saved.price.analysis.schema,
+      );
+    }
     final turns = [...?previous?.userTurns, input.trim()];
     final request = jsonEncode({
       'user_turns': turns,
@@ -100,7 +115,8 @@ class QuantityPlannerRepositoryImpl implements QuantityPlannerRepository {
       _sessionSchemas[schema.key] = schema;
     }
     return PlannerAnalysis(
-      id: previous?.id ?? 'analysis_${++_nextId}',
+      id: previous?.id ?? _newId(),
+      revision: (previous?.revision ?? 0) + 1,
       plan: plan,
       schema: schema,
       result: result,

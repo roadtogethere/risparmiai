@@ -5,6 +5,8 @@ import '../../domain/entities/product_analysis.dart';
 import '../models/chat_message.dart';
 import '../notifiers/savings_chat_notifier.dart';
 import 'archive_page.dart';
+import '../widgets/price_result_card.dart';
+import 'verified_prices_page.dart';
 
 /// Pagina principale per la verifica del risparmio sui prodotti.
 /// Utilizza un [StatefulWidget] per gestire il controller del campo di testo locale.
@@ -51,7 +53,9 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
         actions: <Widget>[
           if (notifier.planner != null)
             IconButton(
-              onPressed: notifier.isLoading ? null : notifier.startNewAnalysis,
+              onPressed: notifier.isLoading || notifier.isSaving
+                  ? null
+                  : notifier.startNewAnalysis,
               tooltip: 'Nuova analisi',
               icon: const Icon(Icons.add),
             ),
@@ -64,7 +68,11 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
             tooltip: 'Archivio',
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const ArchivePage()),
+                MaterialPageRoute<void>(
+                  builder: (_) => notifier.planner != null
+                      ? const VerifiedPricesPage()
+                      : const ArchivePage(),
+                ),
               );
             },
           ),
@@ -138,6 +146,8 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
             ),
 
             // --- SEZIONE 2: Card di Analisi (Rendering Condizionale) ---
+            if (notifier.comparablePrice != null)
+              PriceResultCard(notifier: notifier),
             // Mostra la scheda del miglior prodotto solo se ci sono prodotti analizzati
             if (notifier.analyzedProducts.isNotEmpty)
               Padding(
@@ -195,7 +205,7 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
                     child: InkWell(
                       borderRadius: BorderRadius.circular(24),
                       // Disabilita il click se il notifier è in stato di caricamento
-                      onTap: notifier.isLoading
+                      onTap: notifier.isLoading || notifier.isSaving
                           ? null
                           : () => _submitPrompt(context),
                       child: Padding(
@@ -232,7 +242,8 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
 
   /// Invia il prompt inserito al [SavingsChatNotifier] e pulisce il campo di testo
   Future<void> _submitPrompt(BuildContext context) async {
-    if (context.read<SavingsChatNotifier>().isLoading) return;
+    final notifier = context.read<SavingsChatNotifier>();
+    if (notifier.isLoading || notifier.isSaving) return;
     final prompt = _controller.text;
     if (prompt.trim().isEmpty) return;
 

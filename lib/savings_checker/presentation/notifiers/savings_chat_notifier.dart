@@ -6,10 +6,58 @@ import '../../domain/repositories/quantity_planner_repository.dart';
 import '../../domain/entities/category_reference.dart';
 import '../../domain/repositories/savings_repository.dart';
 import '../models/chat_message.dart';
+import '../../domain/entities/price_analysis.dart';
+import '../../domain/repositories/verified_price_history.dart';
+import '../../domain/services/price_comparison_service.dart';
+import '../../data/datasources/verified_price_store.dart';
 
 class SavingsChatNotifier extends ChangeNotifier {
-  SavingsChatNotifier({required SavingsRepository repository, this.planner})
-    : _repository = repository;
+  SavingsChatNotifier({
+    required SavingsRepository repository,
+    this.planner,
+    VerifiedPriceHistory? priceHistory,
+  }) : _repository = repository,
+       _priceHistory = priceHistory ?? const VerifiedPriceStore();
+
+  final VerifiedPriceHistory _priceHistory;
+  ComparablePrice? _price;
+  PriceComparison? _priceComparison;
+  String? _savedRevision;
+  bool _isSaving = false;
+  String? _saveMessage;
+  ComparablePrice? get comparablePrice => _price;
+  PriceComparison? get priceComparison => _priceComparison;
+  bool get isSaving => _isSaving;
+  bool get priceSaved =>
+      _price != null && _savedRevision == _price!.observationId;
+  String? get saveMessage => _saveMessage;
+  bool get canSavePrice =>
+      !_isLoading &&
+      !_isSaving &&
+      !priceSaved &&
+      _priceComparison != null &&
+      _price?.canSave == true;
+
+  Future<void> saveCurrentPrice() async {
+    if (!canSavePrice) return;
+    final price = _price!;
+    _isSaving = true;
+    _saveMessage = null;
+    notifyListeners();
+    try {
+      final saved = await _priceHistory.save(price);
+      _savedRevision = price.observationId;
+      _saveMessage = saved.alreadySaved
+          ? 'Questo prezzo è già stato salvato.'
+          : 'Prezzo salvato.';
+      // Keep the original comparison: saving must not make the price its own reference.
+    } catch (_) {
+      _saveMessage = 'Salvataggio non riuscito. Puoi riprovare.';
+    } finally {
+      _isSaving = false;
+      notifyListeners();
+    }
+  }
 
   static String formatUnitCost(double value) {
     if (value.isNaN || value.isInfinite) {
@@ -46,10 +94,14 @@ class SavingsChatNotifier extends ChangeNotifier {
   PlannerAnalysis? get plannerAnalysis => _plannerAnalysis;
 
   void startNewAnalysis() {
-    if (_isLoading) return;
+    if (_isLoading || _isSaving) return;
     _plannerAnalysis = null;
     _analyzedProducts.clear();
     _errorMessage = null;
+    _price = null;
+    _priceComparison = null;
+    _saveMessage = null;
+    _savedRevision = null;
     notifyListeners();
   }
 
@@ -64,6 +116,9 @@ class SavingsChatNotifier extends ChangeNotifier {
     _isLoading = true;
     _errorMessage = null;
     _analyzedProducts.clear();
+    _price = null;
+    _priceComparison = null;
+    _saveMessage = null;
     // Keep the current analysis available for explicit corrections too.
     // A separate product starts through startNewAnalysis(), without heuristics.
     final previous = _plannerAnalysis;
@@ -71,6 +126,20 @@ class SavingsChatNotifier extends ChangeNotifier {
     notifyListeners();
     try {
       _plannerAnalysis = await planner!.analyzeTurn(prompt, previous: previous);
+      if (_plannerAnalysis!.result.status ==
+          QuantityResolutionStatus.calculable) {
+        _price = ComparablePrice.fromAnalysis(_plannerAnalysis!);
+        try {
+          final snapshot = await _priceHistory.read();
+          _priceComparison = const PriceComparisonService().compare(
+            _price!,
+            snapshot,
+          );
+        } catch (_) {
+          _errorMessage =
+              'Costo calcolato, ma lo storico verificato non è disponibile. Salvataggio disabilitato.';
+        }
+      }
       _messages.add(
         ChatMessage(
           sender: ChatMessageSender.assistant,
@@ -107,7 +176,7 @@ class SavingsChatNotifier extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> analyzeShoppingPrompt(String rawPrompt) async {
-    if (_isLoading) return;
+    if (_isLoading || _isSaving) return;
     final prompt = rawPrompt.trim();
     if (prompt.isEmpty) {
       return;

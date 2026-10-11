@@ -97,12 +97,14 @@ class ComparableQuantityResult {
 class PlannerAnalysis {
   PlannerAnalysis({
     required this.id,
+    this.revision = 1,
     required this.plan,
     required this.schema,
     required this.result,
     required List<String> userTurns,
   }) : userTurns = List.unmodifiable(userTurns);
   final String id;
+  final int revision;
   final QuantityPlan plan;
   final CategoryReference schema;
   final ComparableQuantityResult result;
