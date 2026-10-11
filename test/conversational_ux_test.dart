@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:risparmiai/main.dart';
+import 'package:risparmiai/savings_checker/domain/entities/quantity_plan.dart';
 import 'package:risparmiai/savings_checker/data/datasources/category_reference_store.dart';
 import 'package:risparmiai/savings_checker/data/datasources/verified_price_store.dart';
 import 'package:risparmiai/savings_checker/data/repositories/quantity_planner_repository_impl.dart';
@@ -58,6 +59,59 @@ Future<void> mount(
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  testWidgets(
+    'compact cost-first card uses structured Italian units and keeps metadata internal',
+    (tester) async {
+      await tester.pumpWidget(
+        MainApp(useMockData: false, aiClient: fixture.Client([paper(500)])),
+      );
+      final n = tester
+          .element(find.byType(SavingsCheckerPage))
+          .read<SavingsChatNotifier>();
+      await tester.runAsync(
+        () => n.analyzeShoppingPrompt('12 rotoli, 500 strappi, 5 euro'),
+      );
+      await tester.pumpAndSettle();
+      final headline = find.text('Circa 0,83 € ogni 1.000 strappi');
+      final original = find.text('0,000833 €/strappo');
+      final save = find.text('Salva questo prezzo');
+      final details = find.text('Dati riconosciuti');
+      expect(
+        tester.getTopLeft(headline).dy,
+        lessThan(tester.getTopLeft(original).dy),
+      );
+      expect(
+        tester.getTopLeft(save).dy,
+        lessThan(tester.getTopLeft(details).dy),
+      );
+      expect(find.textContaining('Numero di rotoli:'), findsNothing);
+      expect(find.textContaining(' · revisione '), findsNothing);
+      expect(find.textContaining(' · richiesta '), findsNothing);
+      expect(n.messages.last.analysisId, n.plannerAnalysis!.id);
+      expect(n.messages.last.revision, 1);
+      await tester.ensureVisible(details);
+      await tester.tap(details);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Numero di rotoli: 12 rotoli'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Strappi per rotolo: 500 strappi per rotolo'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('per rotoli'), findsNothing);
+      await tester.ensureVisible(save);
+      expect(save.hitTestable(), findsOneWidget);
+      expect(n.canSavePrice, isTrue);
+      expect(
+        await tester.runAsync(() => const VerifiedPriceStore().read()),
+        isEmpty,
+      );
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   final tablets = fixture.plan(
     key: 'dishwasher_tabs',
@@ -147,9 +201,12 @@ void main() {
       () => notifier.analyzeShoppingPrompt('12 rotoli 5 euro 3 veli'),
     );
     await mount(tester, notifier);
+    expect(find.text('Prezzo totale: 5 €'), findsNothing);
+    await tester.tap(find.text('Dati riconosciuti'));
+    await tester.pumpAndSettle();
     expect(find.text('Prezzo totale: 5 €'), findsOneWidget);
     expect(find.textContaining('Rotoli: 12 rotoli'), findsOneWidget);
-    expect(find.text('Plies count: 3 veli'), findsOneWidget);
+    expect(find.text('Numero di veli: 3 veli'), findsOneWidget);
     expect(find.textContaining('rolls_count'), findsNothing);
     expect(
       find.textContaining('Puoi correggere i dati in chat'),
@@ -178,7 +235,7 @@ void main() {
       await tester.pump();
       expect(notifier.plannerAnalysis!.id, id);
       expect(find.text('Dati aggiornati'), findsOneWidget);
-      expect(find.text('Quantità comparabile: 5.400 strappo'), findsOneWidget);
+      expect(find.text('Quantità comparabile: 5.400 strappi'), findsOneWidget);
       expect(
         await tester.runAsync(() => const VerifiedPriceStore().read()),
         isEmpty,
@@ -205,7 +262,7 @@ void main() {
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
         isEmpty,
       );
-      expect(find.text('Nuovo prodotto · analisi 2'), findsOneWidget);
+      expect(find.byKey(const ValueKey('analysis-boundary-2')), findsOneWidget);
       await tester.runAsync(
         () => notifier.analyzeShoppingPrompt(
           'Altro prodotto 12 rotoli 200 strappi 5 euro',
@@ -247,6 +304,11 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Nuova analisi').hitTestable(), findsOneWidget);
       expect(find.byTooltip('Invia').hitTestable(), findsOneWidget);
+      await tester.ensureVisible(find.text('Dati riconosciuti'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dati riconosciuti'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Descrizione lunga 19'), findsOneWidget);
       await tester.ensureVisible(find.text('Salva questo prezzo'));
       await tester.pumpAndSettle();
       expect(find.text('Salva questo prezzo').hitTestable(), findsOneWidget);
@@ -280,6 +342,26 @@ void main() {
     () {
       expect(AnalysisDisplay.amount(5 / 6000), '0,000833');
       expect(AnalysisDisplay.amount(6000), '6.000');
+      expect(
+        AnalysisDisplay.quantitySummary(
+          'Quantità comparabile: 6000.0 strappo.',
+        ),
+        'Quantità comparabile: 6.000 strappi.',
+      );
+      expect(
+        AnalysisDisplay.factValue(
+          const QuantityFact(
+            value: 1,
+            unit: 'sheet',
+            source: FactSource.userInput,
+          ),
+        ),
+        '1 strappo',
+      );
+      expect(
+        AnalysisDisplay.quantitySummary('Quanti strappi per rotolo?'),
+        'Quanti strappi per rotolo?',
+      );
       expect(AnalysisDisplay.amount(1e-9), isNot('0'));
       expect(
         AnalysisDisplay.scaledCost(.000833, 'sheet'),

@@ -643,7 +643,7 @@ void main() {
       expect(client.requests.last['current_analysis']['missing'], [
         'sheets_per_roll',
       ]);
-      expect(find.text('Quantità comparabile: 6.000 strappo'), findsOneWidget);
+      expect(find.text('Quantità comparabile: 6.000 strappi'), findsOneWidget);
       expect(find.text('Migliore convenienza'), findsNothing);
       expect(
         (await SharedPreferences.getInstance()).getString(
@@ -681,7 +681,7 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('Quantità comparabile: 1,5 liter'), findsOneWidget);
+    expect(find.text('Quantità comparabile: 1,5 L'), findsOneWidget);
     expect(find.text('Migliore convenienza'), findsNothing);
   });
   test(

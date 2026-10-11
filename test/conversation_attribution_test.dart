@@ -52,11 +52,8 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.text('Analisi 1 · revisione 1'), findsOneWidget);
-      expect(
-        find.text('Analisi 1 · richiesta 2 · non riuscita'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('Analisi 1 ·'), findsNothing);
+      expect(find.text('Richiesta non riuscita'), findsOneWidget);
       await retry.expectNoWrites();
       await tester.runAsync(n.retryLastPlannerTurn);
       await tester.pumpAndSettle();
@@ -75,16 +72,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(n.plannerAnalysis, isNull);
       expect(n.hasFailedPlannerTurn, isFalse);
-      expect(find.text('Nuovo prodotto · analisi 2'), findsOneWidget);
+      expect(find.byKey(const ValueKey('analysis-boundary-2')), findsOneWidget);
       await tester.runAsync(() => n.analyzeShoppingPrompt('Altro prodotto'));
       await tester.pumpAndSettle();
       expect(n.messages.last.analysisNumber, 2);
       expect(n.messages.last.analysisId, isNull);
       expect(find.byType(RecognizedFacts), findsNothing);
-      expect(
-        find.text('Analisi 2 · richiesta 4 · non riuscita'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('Analisi 2 ·'), findsNothing);
       expect(n.messages.where((m) => m.analysisNumber == 1), isNotEmpty);
       await retry.expectNoWrites();
       await tester.pumpWidget(const SizedBox());

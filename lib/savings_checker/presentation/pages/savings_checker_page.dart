@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../domain/entities/product_analysis.dart';
 import '../models/chat_message.dart';
+import '../models/analysis_display.dart';
 import '../notifiers/savings_chat_notifier.dart';
 import '../widgets/price_result_card.dart';
 import '../widgets/recognized_facts.dart';
@@ -55,7 +56,8 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
-              'Nuovo prodotto · analisi $group',
+              'Nuovo prodotto',
+              key: ValueKey('analysis-boundary-$group'),
               textAlign: TextAlign.center,
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
@@ -79,9 +81,6 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Analisi ${notifier.analysisNumber} · revisione ${notifier.plannerAnalysis!.revision}',
-                ),
                 if (notifier.hasFailedPlannerTurn)
                   const Text(
                     'Dati dell’ultimo tentativo elaborato, non della richiesta fallita.',
@@ -255,18 +254,11 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (message.analysisNumber != null)
-              Text(
-                'Analisi ${message.analysisNumber} · richiesta ${message.turnId}'
-                '${message.revision == null ? '' : ' · revisione ${message.revision}'}'
-                '${message.failed ? ' · non riuscita' : ''}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isUser ? Colors.white : const Color(0xFF495057),
-                ),
-              ),
+            if (message.failed) const Text('Richiesta non riuscita'),
             Text(
-              message.text,
+              !isUser && message.revision != null
+                  ? AnalysisDisplay.quantitySummary(message.text)
+                  : message.text,
               style: TextStyle(
                 height: 1.4,
                 color: isUser ? Colors.white : const Color(0xFF212529),

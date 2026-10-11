@@ -42,23 +42,38 @@ class PriceResultCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Analisi ${notifier.analysisNumber} · revisione ${price.analysis.revision}',
-              ),
-              RecognizedFacts(analysis: price.analysis),
-              const Divider(),
               const Text(
                 'Costo comparabile',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               Text(
-                '${amount(price.unitCost)} €/${price.displayUnit}',
+                scaled ?? '${amount(price.unitCost)} €/${price.displayUnit}',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
+              if (scaled != null)
+                Text('${amount(price.unitCost)} €/${price.displayUnit}'),
               Text(
-                'Quantità comparabile: ${amount(price.quantity)} ${price.displayUnit}',
+                'Quantità comparabile: ${amount(price.quantity)} ${AnalysisDisplay.countedUnit(price.canonicalMetric, price.quantity, fallback: price.displayUnit)}',
               ),
-              if (scaled != null) Text(scaled),
+              if (price.canSave)
+                FilledButton(
+                  onPressed: notifier.canSavePrice
+                      ? notifier.saveCurrentPrice
+                      : null,
+                  child: Text(
+                    notifier.priceSaved
+                        ? 'Prezzo salvato'
+                        : notifier.isSaving
+                        ? 'Salvataggio…'
+                        : 'Salva questo prezzo',
+                  ),
+                ),
+              if (notifier.saveMessage != null)
+                Text(
+                  notifier.saveMessage!,
+                  semanticsLabel: notifier.saveMessage,
+                ),
+              RecognizedFacts(analysis: price.analysis),
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
@@ -85,24 +100,6 @@ class PriceResultCard extends StatelessWidget {
               ],
               if (price.totalPrice == 0)
                 const Text('Il prezzo zero è analizzabile, ma non salvabile.'),
-              if (price.canSave)
-                FilledButton(
-                  onPressed: notifier.canSavePrice
-                      ? notifier.saveCurrentPrice
-                      : null,
-                  child: Text(
-                    notifier.priceSaved
-                        ? 'Prezzo salvato'
-                        : notifier.isSaving
-                        ? 'Salvataggio…'
-                        : 'Salva questo prezzo',
-                  ),
-                ),
-              if (notifier.saveMessage != null)
-                Text(
-                  notifier.saveMessage!,
-                  semanticsLabel: notifier.saveMessage,
-                ),
             ],
           ),
         ),

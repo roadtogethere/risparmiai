@@ -16,9 +16,53 @@ class AnalysisDisplay {
   static String factLabel(PlannerAnalysis analysis, String key) {
     if (key == 'price') return 'Prezzo totale';
     for (final attribute in analysis.schema.requiredAttributes) {
-      if (attribute.key == key) return label(attribute.label);
+      if (attribute.key == key && label(attribute.label) != label(key)) {
+        return label(attribute.label);
+      }
+    }
+    final fact = analysis.plan.facts[key];
+    if (fact != null && _singular.containsKey(fact.unit)) {
+      if (fact.per != null) {
+        return '${label(unit(fact.unit))} per ${singular(fact.per!)}';
+      }
+      if (key.endsWith('_count')) return 'Numero di ${unit(fact.unit)}';
     }
     return label(key);
+  }
+
+  // Grammatical unit forms only, independent of category and product.
+  static const _singular = {
+    'roll': 'rotolo',
+    'sheet': 'strappo',
+    'ply': 'velo',
+    'tablet': 'pastiglia',
+    'capsule': 'capsula',
+    'bag': 'sacchetto',
+    'label': 'etichetta',
+    'slice': 'fetta',
+    'wash': 'lavaggio',
+  };
+  static String singular(String code) => _singular[code] ?? unit(code);
+  static String countedUnit(String code, double value, {String? fallback}) =>
+      _singular.containsKey(code)
+      ? (value == 1 ? singular(code) : unit(code))
+      : (_units[code] ?? fallback ?? label(code).toLowerCase());
+
+  // Format only the deterministic, revision-attributed quantity summary.
+  // Never rewrite user messages or free-form provider questions/errors.
+  static String quantitySummary(String text) {
+    final match = RegExp(
+      r'^Quantità comparabile: ([0-9.eE+\-]+) (.+)\.$',
+    ).firstMatch(text);
+    if (match == null) return text;
+    final value = double.tryParse(match[1]!);
+    if (value == null || !value.isFinite) return text;
+    final display = match[2]!;
+    final code = _singular.entries
+        .where((e) => e.value == display || unit(e.key) == display)
+        .map((e) => e.key)
+        .firstOrNull;
+    return 'Quantità comparabile: ${amount(value)} ${code == null ? display : countedUnit(code, value)}.';
   }
 
   // Unit labels, not product/category recognition or conversion rules.
@@ -54,7 +98,7 @@ class AnalysisDisplay {
   }
 
   static String factValue(QuantityFact fact) =>
-      '${amount(fact.value)} ${unit(fact.unit)}${fact.per == null ? '' : ' per ${unit(fact.per!)}'}';
+      '${amount(fact.value)} ${countedUnit(fact.unit, fact.value)}${fact.per == null ? '' : ' per ${singular(fact.per!)}'}';
 
   static String? scaledCost(double cost, String metric) {
     // Only known discrete count units; never scale physical or unknown metrics.
