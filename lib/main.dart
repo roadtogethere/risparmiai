@@ -6,6 +6,7 @@ import 'savings_checker/data/datasources/ai_savings_client.dart';
 import 'savings_checker/data/datasources/gemini_savings_client.dart';
 import 'savings_checker/data/datasources/openai_savings_client.dart';
 import 'savings_checker/data/repositories/savings_repository_impl.dart';
+import 'savings_checker/data/repositories/quantity_planner_repository_impl.dart';
 import 'savings_checker/presentation/notifiers/savings_chat_notifier.dart';
 import 'savings_checker/presentation/pages/savings_checker_page.dart';
 
@@ -82,6 +83,9 @@ class MainApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<SavingsChatNotifier>(
       create: (_) => SavingsChatNotifier(
+        planner: useMockData
+            ? null
+            : QuantityPlannerRepositoryImpl(aiClient: aiClient),
         repository: SavingsRepositoryImpl(
           useMockData: useMockData,
           aiClient: aiClient,

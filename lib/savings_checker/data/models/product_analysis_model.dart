@@ -1,6 +1,7 @@
 import 'package:risparmiai/savings_checker/domain/entities/product_analysis.dart';
 import 'package:risparmiai/savings_checker/domain/entities/product_category.dart';
 
+/// Legacy JSON adapter only. M4A uses QuantityPlanParser and never these fallbacks.
 class ProductAnalysisModel extends ProductAnalysis {
   const ProductAnalysisModel({
     required super.id,

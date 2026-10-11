@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'ai_response_parser.dart';
 import 'ai_savings_client.dart';
+import '../models/quantity_plan_parser.dart';
 
 class OpenAiSavingsClient implements AiSavingsClient {
   OpenAiSavingsClient({
@@ -22,7 +23,10 @@ class OpenAiSavingsClient implements AiSavingsClient {
   }
 
   @override
-  Future<Map<String, dynamic>> analyzeProductWithCatalog(String userPrompt, String catalogJson) async {
+  Future<Map<String, dynamic>> analyzeProductWithCatalog(
+    String userPrompt,
+    String catalogJson,
+  ) async {
     if (apiKey == null || apiKey!.trim().isEmpty) {
       throw StateError('OpenAI API key is required to query the model.');
     }
@@ -46,7 +50,9 @@ class OpenAiSavingsClient implements AiSavingsClient {
     debugPrint('OpenAI raw response=${response.body}');
 
     if (response.statusCode != 200) {
-      throw StateError('OpenAI request failed with status ${response.statusCode}: ${response.body}');
+      throw StateError(
+        'OpenAI request failed with status ${response.statusCode}: ${response.body}',
+      );
     }
 
     final responseBody = json.decode(response.body) as Map<String, dynamic>;
@@ -61,22 +67,31 @@ class OpenAiSavingsClient implements AiSavingsClient {
       throw const FormatException('OpenAI response content is empty.');
     }
 
-    return parseModelResponse(content);
+    return QuantityPlanParser.decode(content);
   }
 
-  Future<List<Map<String, dynamic>>> analyzeShoppingPrompt(String userPrompt) async {
+  Future<List<Map<String, dynamic>>> analyzeShoppingPrompt(
+    String userPrompt,
+  ) async {
     final extraction = await extractRawProductData(userPrompt);
     return <Map<String, dynamic>>[extraction];
   }
 
-  Future<Map<String, dynamic>> extractRawProductData(String userPrompt, [String? catalogJson]) async {
-    final safeCatalogJson = (catalogJson != null && catalogJson.trim().isNotEmpty)
+  Future<Map<String, dynamic>> extractRawProductData(
+    String userPrompt, [
+    String? catalogJson,
+  ]) async {
+    final safeCatalogJson =
+        (catalogJson != null && catalogJson.trim().isNotEmpty)
         ? catalogJson
         : jsonEncode(<String, dynamic>{'categories': <Map<String, dynamic>>[]});
     return analyzeProductWithCatalog(userPrompt, safeCatalogJson);
   }
 
-  Map<String, dynamic> buildRequestPayload(String userPrompt, [String? catalogJson]) {
+  Map<String, dynamic> buildRequestPayload(
+    String userPrompt, [
+    String? catalogJson,
+  ]) {
     final userText = buildUserPromptWithCatalog(userPrompt, catalogJson);
 
     return <String, dynamic>{
@@ -89,4 +104,3 @@ class OpenAiSavingsClient implements AiSavingsClient {
     };
   }
 }
-

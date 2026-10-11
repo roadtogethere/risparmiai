@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 
 import '../../domain/entities/product_analysis.dart';
+import '../../domain/entities/quantity_plan.dart';
+import '../../domain/repositories/quantity_planner_repository.dart';
 import '../../domain/entities/category_reference.dart';
 import '../../domain/repositories/savings_repository.dart';
 import '../models/chat_message.dart';
 
 class SavingsChatNotifier extends ChangeNotifier {
-  SavingsChatNotifier({required SavingsRepository repository})
+  SavingsChatNotifier({required SavingsRepository repository, this.planner})
     : _repository = repository;
 
   static String formatUnitCost(double value) {
@@ -39,6 +41,58 @@ class SavingsChatNotifier extends ChangeNotifier {
   }
 
   final SavingsRepository _repository;
+  final QuantityPlannerRepository? planner;
+  PlannerAnalysis? _plannerAnalysis;
+  PlannerAnalysis? get plannerAnalysis => _plannerAnalysis;
+
+  void startNewAnalysis() {
+    if (_isLoading) return;
+    _plannerAnalysis = null;
+    _analyzedProducts.clear();
+    _errorMessage = null;
+    notifyListeners();
+  }
+
+  Future<void> _analyzePlannerTurn(String prompt) async {
+    _messages.add(
+      ChatMessage(
+        sender: ChatMessageSender.user,
+        text: prompt,
+        createdAt: DateTime.now(),
+      ),
+    );
+    _isLoading = true;
+    _errorMessage = null;
+    _analyzedProducts.clear();
+    // Keep the current analysis available for explicit corrections too.
+    // A separate product starts through startNewAnalysis(), without heuristics.
+    final previous = _plannerAnalysis;
+    if (previous == null) _plannerAnalysis = null;
+    notifyListeners();
+    try {
+      _plannerAnalysis = await planner!.analyzeTurn(prompt, previous: previous);
+      _messages.add(
+        ChatMessage(
+          sender: ChatMessageSender.assistant,
+          text: _plannerAnalysis!.message,
+          createdAt: DateTime.now(),
+        ),
+      );
+    } catch (_) {
+      _errorMessage =
+          'Analisi non riuscita. Verifica i dati e la configurazione, poi riprova.';
+      _messages.add(
+        ChatMessage(
+          sender: ChatMessageSender.assistant,
+          text: _errorMessage!,
+          createdAt: DateTime.now(),
+        ),
+      );
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
   final List<ChatMessage> _messages = <ChatMessage>[];
   final List<ProductAnalysis> _analyzedProducts = <ProductAnalysis>[];
@@ -59,6 +113,11 @@ class SavingsChatNotifier extends ChangeNotifier {
       return;
     }
 
+    if (planner != null) {
+      await _analyzePlannerTurn(prompt);
+      return;
+    }
+    // Legacy/demo path only.
     final isMeaningfulPrompt = _looksLikeProductPrompt(prompt);
     if (!isMeaningfulPrompt) {
       final friendlyMessage =

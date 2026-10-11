@@ -49,6 +49,12 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
         ),
         centerTitle: true,
         actions: <Widget>[
+          if (notifier.planner != null)
+            IconButton(
+              onPressed: notifier.isLoading ? null : notifier.startNewAnalysis,
+              tooltip: 'Nuova analisi',
+              icon: const Icon(Icons.add),
+            ),
           // Pulsante per navigare alla schermata dell'Archivio
           IconButton(
             icon: const Icon(
@@ -109,7 +115,7 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
+                            color: Colors.black.withValues(alpha: 0.04),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -262,7 +268,7 @@ class _ProductInsightCard extends StatelessWidget {
         border: Border.all(color: const Color(0xFFD3E5D8)),
         boxShadow: [
           BoxShadow(
-            color: Colors.green.withOpacity(0.05),
+            color: Colors.green.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

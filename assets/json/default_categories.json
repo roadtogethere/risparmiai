@@ -11,8 +11,8 @@
     {
       "key": "dishwasher_tabs",
       "display_name": "Pastiglie Lavastoviglie",
-      "primary_unit": "capsula",
-      "canonical_metric": "capsule",
+      "primary_unit": "pastiglia",
+      "canonical_metric": "tablet",
       "average_unit_cost": 0.18,
       "required_attributes": ["tabs_count"]
     },

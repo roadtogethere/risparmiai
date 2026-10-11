@@ -1,0 +1,172 @@
+# M4A — Planner e quantità comparabile
+
+## Percorso attivo
+
+`MainApp` collega i provider reali a `QuantityPlannerRepositoryImpl` tramite
+`SavingsChatNotifier.planner`. Il percorso è:
+
+```text
+turni utente → AI → QuantityPlanParser → schema locale
+→ ComparableQuantityResolver → PlannerAnalysis → chat
+```
+
+La modalità mock esplicita e i consumatori del vecchio contratto continuano a
+usare `SavingsRepositoryImpl`. Non esiste fallback dal planner al protocollo
+legacy. OpenAI e Gemini usano lo stesso prompt e parser M4A nelle chiamate live.
+
+## Contratto effettivo
+
+Sono ammessi soltanto `status`, `category`, `facts`, `operation`, `missing` e
+`question`. `missing` e `question` sono facoltativi. `operation` è obbligatorio,
+ma può essere null quando il piano non è ancora determinabile.
+
+Ogni fatto richiede un valore JSON numerico, un codice unità e `source`.
+`per` rappresenta una relazione quantitativa. Le origini rappresentabili sono
+`user_input`, `user_confirmation`, `ai_suggestion`, `external_lookup`.
+Solo le prime due sono utilizzabili dal resolver. `user_confirmation` non è
+accettato nel primo turno. Non è implementato alcun lookup.
+
+Le fonti sono dichiarazioni del planner: il validatore non prova da solo che
+l'interpretazione del testo sia vera. Il prompt vieta di attribuire all'utente
+valori dedotti dalla conoscenza del modello. Le proposte marcate come tali
+richiedono informazioni/conferma e non diventano automaticamente fatti fidati.
+
+### DIRECT
+
+```json
+{
+  "status": "sufficient",
+  "category": {"key": "dishwasher_tabs"},
+  "facts": {
+    "price": {"value": 12, "unit": "EUR", "source": "user_input"},
+    "tablet_count": {"value": 85, "unit": "tablet", "source": "user_input"}
+  },
+  "operation": {"type": "direct", "operand": "tablet_count"}
+}
+```
+
+Il default `dishwasher_tabs` usa ora `tablet`/`pastiglia`. Una categoria custom
+già salvata con `capsule` prevale ancora sul default: nessuna migrazione o
+equivalenza implicita capsule/tablet. Il planner deve rispettare quel catalogo.
+
+### MULTIPLY
+
+```json
+{
+  "status": "sufficient",
+  "category": {"key": "toilet_paper"},
+  "facts": {
+    "price": {"value": 5, "unit": "EUR", "source": "user_input"},
+    "rolls_count": {"value": 12, "unit": "roll", "source": "user_input"},
+    "sheets_per_roll": {"value": 200, "unit": "sheet", "per": "roll", "source": "user_input"}
+  },
+  "operation": {"type": "multiply", "operands": ["rolls_count", "sheets_per_roll"]}
+}
+```
+
+Il resolver richiede esattamente due riferimenti distinti e verifica
+`roll × sheet/roll = sheet` prima di produrre `2400 sheet`. Non moltiplica
+arbitrariamente due numeri, non usa il prezzo come operando e non contiene
+rami per categoria.
+
+### NEEDS_INFORMATION
+
+```json
+{
+  "status": "needs_information",
+  "category": {"key": "toilet_paper"},
+  "facts": {
+    "price": {"value": 5, "unit": "EUR", "source": "user_input"},
+    "rolls_count": {"value": 12, "unit": "roll", "source": "user_input"}
+  },
+  "operation": {"type": "multiply", "operands": ["rolls_count", "sheets_per_roll"]},
+  "missing": ["sheets_per_roll"],
+  "question": "Quanti strappi contiene ciascun rotolo?"
+}
+```
+
+Il notifier conserva l'analisi incompleta. Il turno `500` è inviato al planner
+con i turni precedenti, i fatti, l'operazione e la domanda. Il nuovo piano viene
+validato, i fatti precedenti omessi sono conservati e l'identità resta locale.
+La categoria non può cambiare implicitamente nel completamento. Il pulsante
+"Nuova analisi" abbandona esplicitamente il contesto corrente. Il doppio invio
+durante una richiesta è bloccato. Anche dopo un risultato calcolabile, il
+contesto rimane disponibile per correzioni: il nuovo valore della stessa chiave
+sostituisce quello precedente e la quantità viene rivalidata e ricalcolata.
+Per un prodotto diverso si usa "Nuova analisi", senza euristiche Dart sul testo.
+
+Il prompt richiede tutti i fatti numerici dichiarati, non soltanto gli operandi:
+prezzo e caratteristiche descrittive come il numero di veli devono restare in
+`facts` anche durante `needs_information`. I fatti omessi in un turno successivo
+restano disponibili dal turno precedente. Con `operation: null`, il resolver
+mantiene anche le chiavi `missing` dichiarate dal planner, oltre ai requisiti
+deterministici come il prezzo. Non ricostruisce dal linguaggio naturale un fatto
+che il planner non ha mai estratto; i turni originali restano nel contesto AI.
+
+### CONVERT e categorie nuove
+
+`{"type":"convert","operand":"volume"}` usa esclusivamente il registro
+Dart milliliter/liter e gram/kilogram. Il target viene dallo schema. Fattori
+forniti dall'AI sono rifiutati.
+
+Per categorie sconosciute `category.proposal` deve contenere:
+
+```json
+{
+  "display_name": "Acqua",
+  "canonical_metric": "liter",
+  "primary_unit": "litro",
+  "required_attributes": []
+}
+```
+
+Lo schema viene validato con M3 e mantenuto in memoria per la sessione del
+repository. Gli schemi salvati su disco restano autoritativi. Le nuove proposte
+non vengono ancora persistite: il riavvio perde questi schemi e le conversazioni.
+
+## Invarianti
+
+- `sufficient` non autorizza il calcolo: Dart ricontrolla dati e piano.
+- `needs_information` non produce quantità, anche se i fatti sembrano completi.
+- Prezzo assente richiede informazioni; prezzo zero è valido e distinto.
+- Valori non finiti, quantità non positive e overflow/underflow sono rifiutati.
+- Campi business, risultati precalcolati e campi del vecchio protocollo non
+  sono ammessi come campi aggiuntivi del contratto.
+- La metrica finale deve coincidere con quella locale; una metrica legacy null
+  non viene ricostruita da etichette o proposte AI.
+- Gli operandi definiscono i dati richiesti dalla singola via. DIRECT può usare
+  `6000 sheet` senza attributi della ricetta. La validazione M3 del percorso
+  legacy resta invariata.
+
+## Compatibilità e scope M4B
+
+`ProductAnalysisModel` è un adapter legacy, usato dai test esistenti. I suoi
+fallback e normalizzatori non partecipano al planner. Il vecchio parser e il
+vecchio repository restano separati per compatibilità/demo.
+
+M4A espone solo la quantità comparabile, senza card di convenienza. Controlla
+numericamente anche la divisione prezzo/quantità per conservare le protezioni
+M1.5, ma non espone ancora un nuovo contratto definitivo del costo.
+
+Il repository M4A legge lo store ma non effettua scritture, né con risultati
+incompleti né completi. Non registra quindi due volte un completamento. Non
+introduce garanzie di idempotenza di una futura persistenza M4B.
+
+Restano a M4B il costo definitivo, lo snapshot precedente, il confronto,
+l'atomicità/idempotenza della registrazione e la politica per gli aggregati
+legacy e M3 senza provenienza del calcolo. Il problema dell'autoriferimento
+del vecchio riepilogo non è risolto da questa milestone.
+
+## Verifica
+
+`test/quantity_planner_test.dart` copre A–G, completamento conversazionale e UI,
+schema locale/sessione, assenza di scritture, provenienza, conversioni,
+dimensioni, numeri invalidi e rifiuto di campi autoritativi AI. Le risposte AI
+sono simulate: questi test provano parser, resolver e integrazione, non la
+precisione semantica di un modello remoto su input naturali.
+
+`test/live_planner_test.dart` è opt-in (`RUN_LIVE_PLANNER=1`) e usa i client
+reali, con credenziali locali da ambiente o `.env`. Verifica il dialogo
+"carta igienica 12 rotolo 5 euro 3 veli" → "500" → correzione del prezzo,
+conservando tutti i fatti e senza scritture economiche. I provider privi di
+credenziali vengono saltati; nessuna credenziale o risposta grezza viene stampata.

@@ -2,12 +2,9 @@
 /// usato per estrarre dati grezzi del prodotto e proporre/confermare
 /// la categoria di riferimento a partire da un catalogo fornito.
 ///
-/// Il risultato restituito è sempre nella stessa forma normalizzata,
-/// già validata da [AiResponseParser.parseModelResponse]:
-/// {
-///   "product": { ... },
-///   "category_match": { "is_exact_match": bool, "needs_update": bool, "category": {...} }
-/// }
+/// I provider live restituiscono il protocollo M4A validato da QuantityPlanParser:
+/// status/category/facts/operation/missing/question. Il parser del vecchio
+/// protocollo product/category_match rimane un adapter legacy esplicito.
 abstract class AiSavingsClient {
   Future<Map<String, dynamic>> analyzeProductWithCatalog(
     String userPrompt,

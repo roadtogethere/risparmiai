@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'ai_response_parser.dart';
 import 'ai_savings_client.dart';
+import '../models/quantity_plan_parser.dart';
 
 /// Client HTTP per l'integrazione con l'API Gemini di Google Generative AI.
 ///
@@ -61,17 +62,10 @@ class GeminiSavingsClient implements AiSavingsClient {
       throw StateError('User prompt cannot be empty.');
     }
 
-    // Filtro euristico per scartare input generici o saluti prima dell'invio HTTP
-    if (!_looksLikeRealProductPrompt(normalized)) {
-      debugPrint('Gemini client: generic prompt rejected before request: "$normalized"');
-      throw StateError('Ciao! Inserisci un elemento da valutare e ti aiuterò.');
-    }
-
     // Costruzione e preparazione del payload HTTP
     final requestBody = buildRequestPayload(normalized, catalogJson);
     final uri = Uri.parse('$baseUrl/models/$model:generateContent?key=$apiKey');
 
-    debugPrint('Gemini client: request URI=$uri');
     debugPrint('Gemini client: request body=${json.encode(requestBody)}');
 
     // Esecuzione della chiamata API verso Google
@@ -87,9 +81,13 @@ class GeminiSavingsClient implements AiSavingsClient {
     // Gestione dei codici di errore HTTP
     if (response.statusCode != 200) {
       if (response.statusCode == 404 || response.statusCode == 400) {
-        debugPrint('Gemini client: model "$model" is unavailable or rejected by this API version. Try a supported model such as gemini-2.0-flash.');
+        debugPrint(
+          'Gemini client: model "$model" is unavailable or rejected by this API version. Try a supported model such as gemini-2.0-flash.',
+        );
       }
-      throw StateError('Gemini request failed with status ${response.statusCode}: ${response.body}');
+      throw StateError(
+        'Gemini request failed with status ${response.statusCode}: ${response.body}',
+      );
     }
 
     // Parsing della risposta JSON dell'API Gemini
@@ -111,45 +109,7 @@ class GeminiSavingsClient implements AiSavingsClient {
     }
 
     // Conversione del testo restituito dal modello in una mappa strutturata
-    return AiResponseParser.parseModelResponse(text);
-  }
-
-  /// Verifica euristica per determinare se il testo inserito dall'utente
-  /// descrive un prodotto reale o se è solo un saluto/test generico.
-  ///
-  /// Restituisce `true` se il prompt contiene lettere combinate con numeri
-  /// o parole chiave legate ai prodotti di consumo (es. "latte", "detergente", "euro").
-  bool _looksLikeRealProductPrompt(String prompt) {
-    if (prompt.isEmpty || prompt.length < 3) {
-      return false;
-    }
-
-    final normalized = prompt.toLowerCase();
-    final genericInputs = <String>{
-      'ciao',
-      'prova',
-      'test',
-      'come stai',
-      'come va',
-      'hi',
-      'hello',
-      'salve',
-      'buongiorno',
-      'buonasera',
-      'ciao come stai',
-      'ok',
-    };
-
-    // Scarta saluti ed espressioni di test esplicite
-    if (genericInputs.contains(normalized)) {
-      return false;
-    }
-
-    final hasLetters = RegExp(r'[a-zà-ù]').hasMatch(normalized);
-    final hasNumber = RegExp(r'\d').hasMatch(normalized);
-    final hasProductWord = RegExp(r'\b(carta|igienica|detergente|lavastoviglie|pastiglie|pane|latte|sapone|shampoo|acqua|pasta|biscotti|caffè|caffe|rotoli|strappi|kg|litro|ml|euro|\€|prezzo)\b').hasMatch(normalized);
-
-    return hasLetters && (hasNumber || hasProductWord);
+    return QuantityPlanParser.decode(text);
   }
 
   /// Costruisce la struttura dati della mappa JSON da inviare nel corpo della richiesta REST a Gemini.
@@ -158,7 +118,10 @@ class GeminiSavingsClient implements AiSavingsClient {
   /// * `system_instruction`: Il prompt di sistema [kSavingsSystemPrompt].
   /// * `contents`: L'input combinato dell'utente e del catalogo.
   /// * `generationConfig`: Parametri di generazione (bassa temperatura, output JSON e disattivazione del budget di ragionamento).
-  Map<String, dynamic> buildRequestPayload(String userPrompt, String? catalogJson) {
+  Map<String, dynamic> buildRequestPayload(
+    String userPrompt,
+    String? catalogJson,
+  ) {
     final userText = buildUserPromptWithCatalog(userPrompt, catalogJson);
 
     return <String, dynamic>{

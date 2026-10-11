@@ -13,6 +13,8 @@ import 'package:risparmiai/savings_checker/domain/entities/required_attribute.da
 import 'package:risparmiai/savings_checker/domain/repositories/savings_repository.dart';
 import 'package:risparmiai/savings_checker/domain/services/savings_calculator_service.dart';
 
+/// Legacy product/category_match and explicit demo path.
+/// The live M4A application uses QuantityPlannerRepositoryImpl instead.
 class SavingsRepositoryImpl implements SavingsRepository {
   SavingsRepositoryImpl({
     AiSavingsClient? aiClient,
