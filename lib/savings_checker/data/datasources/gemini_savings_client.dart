@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'ai_response_parser.dart';
 import 'ai_savings_client.dart';
+import 'ai_http_request.dart';
 import '../models/quantity_plan_parser.dart';
 
 /// Client HTTP per l'integrazione con l'API Gemini di Google Generative AI.
@@ -21,7 +22,12 @@ class GeminiSavingsClient implements AiSavingsClient {
     this.apiKey,
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta',
     this.model = 'gemini-3.6-flash',
-  });
+    this.requestTimeout = const Duration(seconds: 30),
+    http.Client Function()? httpClientFactory,
+  }) : _httpClientFactory = httpClientFactory ?? http.Client.new;
+
+  final Duration requestTimeout;
+  final http.Client Function() _httpClientFactory;
 
   /// Chiave API usata per autenticare le richieste su Google AI Studio.
   final String? apiKey;
@@ -69,8 +75,10 @@ class GeminiSavingsClient implements AiSavingsClient {
     debugPrint('Gemini client: request body=${json.encode(requestBody)}');
 
     // Esecuzione della chiamata API verso Google
-    final response = await http.post(
+    final response = await postAiRequest(
       uri,
+      timeout: requestTimeout,
+      clientFactory: _httpClientFactory,
       headers: <String, String>{'Content-Type': 'application/json'},
       body: json.encode(requestBody),
     );

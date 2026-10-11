@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../domain/entities/product_analysis.dart';
@@ -10,6 +12,14 @@ import '../../domain/entities/price_analysis.dart';
 import '../../domain/repositories/verified_price_history.dart';
 import '../../domain/services/price_comparison_service.dart';
 import '../../data/datasources/verified_price_store.dart';
+
+/// Unvalidated input plus the immutable context to replay, never economic data.
+class _PlannerAttempt {
+  const _PlannerAttempt(this.prompt, this.previous);
+  final String prompt;
+  // Includes the local identity, revision, facts, question and accepted turns.
+  final PlannerAnalysis? previous;
+}
 
 class SavingsChatNotifier extends ChangeNotifier {
   SavingsChatNotifier({
@@ -92,9 +102,27 @@ class SavingsChatNotifier extends ChangeNotifier {
   final QuantityPlannerRepository? planner;
   PlannerAnalysis? _plannerAnalysis;
   PlannerAnalysis? get plannerAnalysis => _plannerAnalysis;
+  _PlannerAttempt? _failedAttempt;
+  int _plannerGeneration = 0;
+  bool get hasFailedPlannerTurn => _failedAttempt != null;
+  bool get canRetryPlannerTurn =>
+      hasFailedPlannerTurn && !_isLoading && !_isSaving;
+
+  Future<void> retryLastPlannerTurn() async {
+    if (!canRetryPlannerTurn) return;
+    await _analyzePlannerTurn(_failedAttempt!, appendUserMessage: false);
+  }
+
+  @override
+  void dispose() {
+    _plannerGeneration++;
+    super.dispose();
+  }
 
   void startNewAnalysis() {
     if (_isLoading || _isSaving) return;
+    _plannerGeneration++;
+    _failedAttempt = null;
     _plannerAnalysis = null;
     _analyzedProducts.clear();
     _errorMessage = null;
@@ -105,14 +133,21 @@ class SavingsChatNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _analyzePlannerTurn(String prompt) async {
-    _messages.add(
-      ChatMessage(
-        sender: ChatMessageSender.user,
-        text: prompt,
-        createdAt: DateTime.now(),
-      ),
-    );
+  Future<void> _analyzePlannerTurn(
+    _PlannerAttempt attempt, {
+    bool appendUserMessage = true,
+  }) async {
+    final generation = ++_plannerGeneration;
+    if (appendUserMessage) {
+      _failedAttempt = null;
+      _messages.add(
+        ChatMessage(
+          sender: ChatMessageSender.user,
+          text: attempt.prompt,
+          createdAt: DateTime.now(),
+        ),
+      );
+    }
     _isLoading = true;
     _errorMessage = null;
     _analyzedProducts.clear();
@@ -121,21 +156,27 @@ class SavingsChatNotifier extends ChangeNotifier {
     _saveMessage = null;
     // Keep the current analysis available for explicit corrections too.
     // A separate product starts through startNewAnalysis(), without heuristics.
-    final previous = _plannerAnalysis;
-    if (previous == null) _plannerAnalysis = null;
     notifyListeners();
     try {
-      _plannerAnalysis = await planner!.analyzeTurn(prompt, previous: previous);
+      final analysis = await planner!.analyzeTurn(
+        attempt.prompt,
+        previous: attempt.previous,
+      );
+      if (generation != _plannerGeneration) return;
+      _plannerAnalysis = analysis;
+      _failedAttempt = null;
       if (_plannerAnalysis!.result.status ==
           QuantityResolutionStatus.calculable) {
         _price = ComparablePrice.fromAnalysis(_plannerAnalysis!);
         try {
           final snapshot = await _priceHistory.read();
+          if (generation != _plannerGeneration) return;
           _priceComparison = const PriceComparisonService().compare(
             _price!,
             snapshot,
           );
         } catch (_) {
+          if (generation != _plannerGeneration) return;
           _errorMessage =
               'Costo calcolato, ma lo storico verificato non è disponibile. Salvataggio disabilitato.';
         }
@@ -147,9 +188,12 @@ class SavingsChatNotifier extends ChangeNotifier {
           createdAt: DateTime.now(),
         ),
       );
-    } catch (_) {
-      _errorMessage =
-          'Analisi non riuscita. Verifica i dati e la configurazione, poi riprova.';
+    } catch (error) {
+      if (generation != _plannerGeneration) return;
+      _failedAttempt = attempt;
+      _errorMessage = error is TimeoutException
+          ? 'Il servizio sta impiegando troppo tempo a rispondere. Puoi riprovare.'
+          : 'Analisi non riuscita. Puoi riprovare.';
       _messages.add(
         ChatMessage(
           sender: ChatMessageSender.assistant,
@@ -158,8 +202,10 @@ class SavingsChatNotifier extends ChangeNotifier {
         ),
       );
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (generation == _plannerGeneration) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -183,7 +229,7 @@ class SavingsChatNotifier extends ChangeNotifier {
     }
 
     if (planner != null) {
-      await _analyzePlannerTurn(prompt);
+      await _analyzePlannerTurn(_PlannerAttempt(prompt, _plannerAnalysis));
       return;
     }
     // Legacy/demo path only.

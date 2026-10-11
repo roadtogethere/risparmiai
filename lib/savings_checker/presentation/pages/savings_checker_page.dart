@@ -146,6 +146,13 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
             ),
 
             // --- SEZIONE 2: Card di Analisi (Rendering Condizionale) ---
+            if (notifier.hasFailedPlannerTurn)
+              TextButton(
+                onPressed: notifier.canRetryPlannerTurn
+                    ? notifier.retryLastPlannerTurn
+                    : null,
+                child: const Text('Riprova'),
+              ),
             if (notifier.comparablePrice != null)
               PriceResultCard(notifier: notifier),
             // Mostra la scheda del miglior prodotto solo se ci sono prodotti analizzati

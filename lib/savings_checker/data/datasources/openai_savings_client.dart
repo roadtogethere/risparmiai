@@ -5,13 +5,19 @@ import 'package:http/http.dart' as http;
 
 import 'ai_response_parser.dart';
 import 'ai_savings_client.dart';
+import 'ai_http_request.dart';
 import '../models/quantity_plan_parser.dart';
 
 class OpenAiSavingsClient implements AiSavingsClient {
   OpenAiSavingsClient({
     this.apiKey,
     this.baseUrl = 'https://api.openai.com/v1',
-  });
+    this.requestTimeout = const Duration(seconds: 30),
+    http.Client Function()? httpClientFactory,
+  }) : _httpClientFactory = httpClientFactory ?? http.Client.new;
+
+  final Duration requestTimeout;
+  final http.Client Function() _httpClientFactory;
 
   final String? apiKey;
   final String baseUrl;
@@ -37,8 +43,10 @@ class OpenAiSavingsClient implements AiSavingsClient {
     }
 
     final requestBody = buildRequestPayload(normalized, catalogJson);
-    final response = await http.post(
+    final response = await postAiRequest(
       Uri.parse('$baseUrl/chat/completions'),
+      timeout: requestTimeout,
+      clientFactory: _httpClientFactory,
       headers: <String, String>{
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $apiKey',

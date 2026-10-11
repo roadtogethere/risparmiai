@@ -221,3 +221,44 @@ Il percorso legacy/demo e i suoi aggregati non sono stati modificati.
 Copertura: `price_history_test.dart` per matematica, snapshot, provenienza,
 correzioni e UI; `verified_price_persistence_test.dart` per scritture fallite,
 cache e conferme perse. I test live AI restano opt-in.
+
+## M5B.1 — timeout e recupero manuale del turno
+
+OpenAI e Gemini accettano `requestTimeout`, inizialmente 30 secondi per
+tentativo HTTP, comprensivo della lettura del corpo della risposta. Non è un
+timeout globale delle letture locali del repository. Un `TimeoutException`
+produce in chat: «Il servizio sta impiegando troppo tempo a rispondere.
+Puoi riprovare.» Il caricamento viene liberato; non esistono retry automatici.
+
+Ogni tentativo possiede un client HTTP dedicato, creato tramite una factory
+iniettabile e chiuso in `finally`, anche al timeout. Le implementazioni IO e
+browser della dipendenza `http` già presente consentono il rilascio/aborto del
+trasporto tramite `close()`. Il solo timeout di un Future non interrompe
+fisicamente la richiesta sottostante; neppure la chiusura del client garantisce
+che il provider interrompa l'elaborazione sul server. Client alternativi possono
+ignorare la chiusura: la loro risposta tardiva non supera comunque il Future
+scaduto e non arriva a parser, repository o stato conversazionale.
+
+Il notifier conserva in memoria il testo effettivamente inviato (dopo il trim
+già previsto dall'input UI) e il riferimento immutabile all'analisi precedente:
+ID, revisione, fatti, domanda e turni. Questa richiesta fallita non è un fatto
+validato. «Riprova» reinvia quel testo con lo stesso contesto, senza aggiungere
+un secondo messaggio utente. Un primo turno fallito non ha ancora un'identità
+di analisi validata: l'ID viene creato alla prima risposta accettata, come prima.
+Le continuazioni conservano invece l'ID e incrementano la revisione soltanto
+quando il repository restituisce l'analisi. Il catalogo locale viene riletto e
+rimane autoritativo anche durante il retry.
+
+Durante il retry sono bloccati altri invii e salvataggi. Un nuovo errore lascia
+disponibile la stessa azione; il successo elimina lo stato recuperabile.
+«Nuova analisi», disponibile dopo l'errore, azzera il tentativo; un nuovo testo
+inviato normalmente lo sostituisce. I vecchi messaggi rimangono nella cronologia.
+Il notifier verifica inoltre la generazione locale delle operazioni asincrone
+prima di applicarne gli esiti, invalidandola al reset e alla distruzione.
+Nessun retry salva osservazioni economiche o modifica revisioni già persistite.
+Il recupero è solo in memoria e non sopravvive alla chiusura dell'app.
+
+`test/planner_retry_test.dart` usa esclusivamente trasporti HTTP simulati per
+timeout di entrambi i provider, retry iniziale e del completamento `500`, errori
+ripetuti, identità/revisioni, doppio tap, reset, risposte/errori tardivi, UI e
+assenza di scritture economiche.
