@@ -332,6 +332,64 @@ void main() {
     );
   });
 
+  test(
+    'M5C.1 saved price survives simulated storage and notifier recreation',
+    () async {
+      final first = SavingsChatNotifier(
+        repository: SavingsRepositoryImpl(),
+        planner: QuantityPlannerRepositoryImpl(
+          aiClient: fixture.Client([water(2)]),
+        ),
+        priceHistory: VerifiedPriceStore(),
+      );
+      await first.analyzeShoppingPrompt('Acqua 1 L 2 euro');
+      expect(first.priceComparison!.position, PricePosition.noHistory);
+      await first.saveCurrentPrice();
+      expect(first.priceSaved, isTrue);
+      final savedId = first.comparablePrice!.observationId;
+      final prefs = await SharedPreferences.getInstance();
+      final persisted = <String, Object>{
+        for (final key in prefs.getKeys()) key: prefs.get(key)!,
+      };
+      first.dispose();
+
+      // Recreate the preferences mock from serialized data, not from domain objects.
+      // This exercises reconstruction in one process, not smartphone restart durability.
+      SharedPreferences.setMockInitialValues(persisted);
+      final restoredStore = VerifiedPriceStore();
+      final payload = water(3);
+      payload['category'] = {
+        'key': 'water',
+      }; // Must reuse the persisted schema.
+      final second = SavingsChatNotifier(
+        repository: SavingsRepositoryImpl(),
+        planner: QuantityPlannerRepositoryImpl(
+          aiClient: fixture.Client([payload]),
+        ),
+        priceHistory: restoredStore,
+      );
+      addTearDown(second.dispose);
+      final restored = await restoredStore.read();
+      expect(restored, hasLength(1));
+      expect(restored.single.price.observationId, savedId);
+      expect(restored.single.price.unitCost, 2);
+      await second.analyzeShoppingPrompt('Acqua 1 L 3 euro');
+      expect(second.errorMessage, isNull);
+      expect(second.comparablePrice!.unitCost, 3);
+      expect(second.priceComparison!.count, 1);
+      expect(second.priceComparison!.previousMinimum, 2);
+      expect(second.priceComparison!.previousAverage, 2);
+      expect(second.priceComparison!.position, PricePosition.aboveAverage);
+      expect(second.priceSaved, isFalse);
+      expect(
+        (await SharedPreferences.getInstance()).getString(
+          VerifiedPriceStore.storageKey,
+        ),
+        persisted[VerifiedPriceStore.storageKey],
+      );
+    },
+  );
+
   test('history corruption is not silently reset on save', () async {
     final price = await priced(2);
     final prefs = await SharedPreferences.getInstance();

@@ -15,21 +15,25 @@ class SavingsCalculatorService {
         savingsPercentage: 0,
         savedAmount: 0,
         isBetterValue: true,
-        message: 'Nessun confronto disponibile: il prodotto è il riferimento attuale.',
+        message:
+            'Nessun confronto disponibile: il prodotto è il riferimento attuale.',
       );
     }
 
-    final averageUnitCost = (products
-            .map((item) => item.unitCost)
-            .reduce((sum, value) => sum + value) /
-        products.length)
-        .toDouble();
+    final averageUnitCost =
+        (products
+                    .map((item) => item.unitCost)
+                    .reduce((sum, value) => sum + value) /
+                products.length)
+            .toDouble();
 
     final savingsPercentage = averageUnitCost > 0
         ? ((averageUnitCost - product.unitCost) / averageUnitCost) * 100
         : 0.0;
 
-    final savedAmount = (averageUnitCost - product.unitCost) * product.totalUnitsCount.toDouble();
+    final savedAmount =
+        (averageUnitCost - product.unitCost) *
+        product.totalUnitsCount.toDouble();
 
     return SavingsComparison(
       product: product,
@@ -55,15 +59,17 @@ class SavingsCalculatorService {
     return (diff / referencePrice) * 100;
   }
 
-  ProductAnalysis bestValueProduct({
-    required List<ProductAnalysis> products,
-  }) {
+  ProductAnalysis bestValueProduct({required List<ProductAnalysis> products}) {
     if (products.isEmpty) {
-      throw StateError('Non è possibile trovare il prodotto migliore senza dati.');
+      throw StateError(
+        'Non è possibile trovare il prodotto migliore senza dati.',
+      );
     }
 
     return products.reduce((currentBest, candidate) {
-      return candidate.unitCost < currentBest.unitCost ? candidate : currentBest;
+      return candidate.unitCost < currentBest.unitCost
+          ? candidate
+          : currentBest;
     });
   }
 }

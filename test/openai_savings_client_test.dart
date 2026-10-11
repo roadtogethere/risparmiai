@@ -7,15 +7,20 @@ import 'package:risparmiai/savings_checker/presentation/notifiers/savings_chat_n
 
 class _FailingAiClient implements AiSavingsClient {
   @override
-  Future<Map<String, dynamic>> analyzeProductWithCatalog(String userPrompt, String catalogJson) async {
+  Future<Map<String, dynamic>> analyzeProductWithCatalog(
+    String userPrompt,
+    String catalogJson,
+  ) async {
     throw StateError('AI should not be called for invalid prompts');
   }
 }
 
 void main() {
   group('OpenAiSavingsClient', () {
-    test('parses nested product and category_match JSON and forbids business fields', () {
-      const rawResponse = '''
+    test(
+      'parses nested product and category_match JSON and forbids business fields',
+      () {
+        const rawResponse = '''
       {
         "product": {
           "category_key": "toilet_paper",
@@ -44,16 +49,17 @@ void main() {
       }
       ''';
 
-      final parsed = OpenAiSavingsClient.parseModelResponse(rawResponse);
+        final parsed = OpenAiSavingsClient.parseModelResponse(rawResponse);
 
-      expect(parsed['product']['category_key'], 'toilet_paper');
-      expect(parsed['product']['primary_unit_name'], 'strappo');
-      expect(parsed['category_match']['category']['key'], 'toilet_paper');
-      expect(parsed['category_match']['needs_update'], isFalse);
-      expect(parsed['product'].containsKey('unitCost'), isFalse);
-      expect(parsed['product'].containsKey('savings'), isFalse);
-      expect(parsed['product'].containsKey('averageUnitCost'), isFalse);
-    });
+        expect(parsed['product']['category_key'], 'toilet_paper');
+        expect(parsed['product']['primary_unit_name'], 'strappo');
+        expect(parsed['category_match']['category']['key'], 'toilet_paper');
+        expect(parsed['category_match']['needs_update'], isFalse);
+        expect(parsed['product'].containsKey('unitCost'), isFalse);
+        expect(parsed['product'].containsKey('savings'), isFalse);
+        expect(parsed['product'].containsKey('averageUnitCost'), isFalse);
+      },
+    );
 
     test('does not force strappo for generic household products', () {
       final parsed = ProductAnalysisModel.fromJson({
@@ -64,29 +70,46 @@ void main() {
         'totalPrice': 5.99,
         'primaryUnitName': 'litro',
         'totalUnitsCount': 2.5,
-        'specificAttributes': {
-          'total_liters': 2.5,
-          'total_washes': 40,
-        },
+        'specificAttributes': {'total_liters': 2.5, 'total_washes': 40},
       });
 
       expect(parsed.primaryUnitName, 'litro');
       expect(parsed.category.name, 'household');
     });
 
-    test('formats tiny costs with more than two decimals without trailing zeros', () {
-      expect(SavingsChatNotifier.formatUnitCost(0.00185), '0.00185');
-      expect(SavingsChatNotifier.formatUnitCost(5.99), '5.99');
-      expect(SavingsChatNotifier.formatUnitCost(12), '12');
-    });
+    test(
+      'formats tiny costs with more than two decimals without trailing zeros',
+      () {
+        expect(SavingsChatNotifier.formatUnitCost(0.00185), '0.00185');
+        expect(SavingsChatNotifier.formatUnitCost(5.99), '5.99');
+        expect(SavingsChatNotifier.formatUnitCost(12), '12');
+      },
+    );
 
-    test('mock mode does not fall back to paper products for dishwasher prompts', () async {
-      final repository = SavingsRepositoryImpl(useMockData: true);
-      final products = await repository.analyzeProducts(userPrompt: 'Pastiglie lavastoviglie 106 a 14 euro');
+    test(
+      'mock mode does not fall back to paper products for dishwasher prompts',
+      () async {
+        final repository = SavingsRepositoryImpl(useMockData: true);
+        final products = await repository.analyzeProducts(
+          userPrompt: 'Pastiglie lavastoviglie 106 a 14 euro',
+        );
 
-      expect(products.any((product) => product.productName.toLowerCase().contains('carta')), isFalse);
-      expect(products.any((product) => product.productName.toLowerCase().contains('lavastoviglie') || product.brand.toLowerCase().contains('lavastoviglie')), isTrue);
-    });
+        expect(
+          products.any(
+            (product) => product.productName.toLowerCase().contains('carta'),
+          ),
+          isFalse,
+        );
+        expect(
+          products.any(
+            (product) =>
+                product.productName.toLowerCase().contains('lavastoviglie') ||
+                product.brand.toLowerCase().contains('lavastoviglie'),
+          ),
+          isTrue,
+        );
+      },
+    );
 
     test('rejects vague prompts before calling the AI client', () async {
       final repository = SavingsRepositoryImpl(

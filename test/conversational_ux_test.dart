@@ -59,6 +59,85 @@ Future<void> mount(
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  final tablets = fixture.plan(
+    key: 'dishwasher_tabs',
+    metric: 'tablet',
+    value: 85,
+  );
+  tablets['category'] = {'key': 'dishwasher_tabs'};
+  tablets['facts']['price'] = fixture.fact(12, 'EUR');
+  final water = fixture.plan(
+    type: 'convert',
+    value: 500,
+    observed: 'milliliter',
+  );
+  water['facts']['price'] = fixture.fact(0.4, 'EUR');
+  water['category']['proposal']['primary_unit'] = 'L';
+
+  for (final scenario in [
+    (
+      input: '85 pastiglie, 12 euro',
+      payload: tablets,
+      quantity: 85.0,
+      metric: 'tablet',
+      cost: 12 / 85,
+      display: '0,1412 €/pastiglia',
+    ),
+    (
+      input: '12 rotoli, 200 strappi per rotolo, 5 euro',
+      payload: fixture.paper(),
+      quantity: 2400.0,
+      metric: 'sheet',
+      cost: 5 / 2400,
+      display: '0,002083 €/strappo',
+    ),
+    (
+      input: '500 ml, 40 centesimi',
+      payload: water,
+      quantity: 0.5,
+      metric: 'liter',
+      cost: 0.8,
+      display: '0,8 €/L',
+    ),
+  ]) {
+    testWidgets('M5C.1 input to economic card: ${scenario.input}', (
+      tester,
+    ) async {
+      final client = fixture.Client([scenario.payload]);
+      await tester.pumpWidget(MainApp(useMockData: false, aiClient: client));
+      final notifier = tester
+          .element(find.byType(SavingsCheckerPage))
+          .read<SavingsChatNotifier>();
+      await tester.enterText(find.byType(TextField), scenario.input);
+      await tester.runAsync(() async {
+        await tester.tap(find.byTooltip('Invia'));
+        while (notifier.isLoading) {
+          await Future<void>.delayed(Duration.zero);
+        }
+      });
+      await tester.pumpAndSettle();
+      expect(client.requests.single['user_turns'], [scenario.input]);
+      expect(notifier.errorMessage, isNull);
+      final price = notifier.comparablePrice!;
+      expect(price.quantity, scenario.quantity);
+      expect(price.canonicalMetric, scenario.metric);
+      expect(price.unitCost, scenario.cost);
+      final costText = find.text(scenario.display);
+      await tester.ensureVisible(costText);
+      expect(costText.hitTestable(), findsOneWidget);
+      expect(find.textContaining('convenienza non valutabile'), findsOneWidget);
+      expect(notifier.priceComparison!.count, 0);
+      expect(notifier.priceComparison!.isPotentialNewMinimum, isFalse);
+      expect(
+        await tester.runAsync(() => const VerifiedPriceStore().read()),
+        isEmpty,
+      );
+      final prefs = await tester.runAsync(SharedPreferences.getInstance);
+      expect(prefs!.getString(VerifiedPriceStore.storageKey), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   testWidgets('incomplete facts use schema labels and preserve descriptors', (
     tester,
   ) async {

@@ -1,9 +1,7 @@
 import '../entities/product_analysis.dart';
 
 abstract class SavingsRepository {
-  Future<List<ProductAnalysis>> analyzeProducts({
-    required String userPrompt,
-  });
+  Future<List<ProductAnalysis>> analyzeProducts({required String userPrompt});
 
   Future<ProductAnalysis> identifyBestValue({
     required ProductAnalysis currentProduct,

@@ -22,7 +22,8 @@ class SuggestedCategory {
     return SuggestedCategory(
       categoryKey: (json['category_key'] ?? json['key'] ?? '').toString(),
       displayName: (json['display_name'] ?? json['name'] ?? '').toString(),
-      primaryUnitName: (json['primary_unit_name'] ?? json['primary_unit'] ?? '').toString(),
+      primaryUnitName: (json['primary_unit_name'] ?? json['primary_unit'] ?? '')
+          .toString(),
       averageUnitCost: (json['average_unit_cost'] is num)
           ? (json['average_unit_cost'] as num).toDouble()
           : double.tryParse(json['average_unit_cost']?.toString() ?? '') ?? 0,

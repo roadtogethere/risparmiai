@@ -28,7 +28,7 @@ Una correzione mantiene l'identità corrente e aggiorna la revisione. Le osserva
 
 ## Errori e recupero
 
-I provider hanno un timeout configurabile, inizialmente 30 secondi per tentativo. Il timeout del Future non garantisce la cancellazione fisica della richiesta HTTP. Non esistono retry automatici.
+I provider hanno un timeout configurabile, inizialmente 30 secondi per tentativo. Il timeout del Future non garantisce la cancellazione fisica della richiesta HTTP. La politica M5B.2 consente al massimo un retry automatico per HTTP 429 e 500/502/503/504, entro un budget complessivo HTTP di 30 secondi che include tentativi e attesa. `Retry-After` viene rispettato se l'attesa rientra nel budget; altrimenti viene restituito l'errore senza anticipare il retry. Il retry manuale tramite **Riprova** resta disponibile.
 
 `SavingsFailure` distingue gli errori. Il notifier conserva il testo esatto e il contesto del turno fallito: **Riprova** reinvia quel tentativo, senza aggiungere il testo “Riprova” ai fatti o duplicare il messaggio utente. Identità/generazione proteggono dalle risposte tardive dopo reset. Le risposte non valide non sostituiscono l'ultima analisi valida.
 

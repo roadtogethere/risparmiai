@@ -14,7 +14,9 @@ class CategoryReferenceDataSource {
   }
 
   Future<List<CategoryReferenceModel>> _loadDefaultCategories() async {
-    final raw = await rootBundle.loadString('assets/json/default_categories.json');
+    final raw = await rootBundle.loadString(
+      'assets/json/default_categories.json',
+    );
     final decoded = jsonDecode(raw) as Map<String, dynamic>;
     final entries = decoded['categories'];
 

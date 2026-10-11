@@ -5,10 +5,7 @@
 /// [key] tecnica, così qualunque nuova categoria arriva già con un testo
 /// mostrabile in UI senza bisogno di dizionari statici lato Dart.
 class RequiredAttribute {
-  const RequiredAttribute({
-    required this.key,
-    required this.label,
-  });
+  const RequiredAttribute({required this.key, required this.label});
 
   final String key;
   final String label;
@@ -18,7 +15,10 @@ class RequiredAttribute {
       final map = Map<String, dynamic>.from(json);
       final key = (map['key'] ?? '').toString();
       final label = (map['label'] ?? '').toString();
-      return RequiredAttribute(key: key, label: label.isEmpty ? _humanize(key) : label);
+      return RequiredAttribute(
+        key: key,
+        label: label.isEmpty ? _humanize(key) : label,
+      );
     }
 
     // Retrocompatibilità: formati legacy con solo stringhe (es. il seed
