@@ -20,8 +20,6 @@ class SavingsCheckerPage extends StatefulWidget {
 class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scroll = ScrollController();
-  // Presentation boundaries only; never passed to the planner or storage.
-  final Set<int> _productStarts = {0};
 
   @override
   void dispose() {
@@ -40,7 +38,6 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
     if (notifier.isLoading || notifier.isSaving) return;
     notifier.startNewAnalysis();
     _controller.clear();
-    setState(() => _productStarts.add(notifier.messages.length));
     _showLatest();
   }
 
@@ -48,18 +45,23 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
   Widget build(BuildContext context) {
     final notifier = context.watch<SavingsChatNotifier>();
     final items = <Widget>[];
+    int? previousGroup;
     for (var i = 0; i <= notifier.messages.length; i++) {
-      if (_productStarts.contains(i) && notifier.planner != null) {
+      final group = i < notifier.messages.length
+          ? notifier.messages[i].analysisNumber
+          : notifier.analysisNumber;
+      if (group != previousGroup && notifier.planner != null) {
         items.add(
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
-              'Nuovo prodotto · analisi ${_productStarts.toList().indexOf(i) + 1}',
+              'Nuovo prodotto · analisi $group',
               textAlign: TextAlign.center,
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
         );
+        previousGroup = group;
       }
       if (i < notifier.messages.length) {
         items.add(_message(notifier.messages[i]));
@@ -74,7 +76,19 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
         Card(
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: RecognizedFacts(analysis: notifier.plannerAnalysis!),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Analisi ${notifier.analysisNumber} · revisione ${notifier.plannerAnalysis!.revision}',
+                ),
+                if (notifier.hasFailedPlannerTurn)
+                  const Text(
+                    'Dati dell’ultimo tentativo elaborato, non della richiesta fallita.',
+                  ),
+                RecognizedFacts(analysis: notifier.plannerAnalysis!),
+              ],
+            ),
           ),
         ),
       );
@@ -238,12 +252,27 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
             bottomRight: Radius.circular(isUser ? 4 : 16),
           ),
         ),
-        child: Text(
-          message.text,
-          style: TextStyle(
-            height: 1.4,
-            color: isUser ? Colors.white : const Color(0xFF212529),
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (message.analysisNumber != null)
+              Text(
+                'Analisi ${message.analysisNumber} · richiesta ${message.turnId}'
+                '${message.revision == null ? '' : ' · revisione ${message.revision}'}'
+                '${message.failed ? ' · non riuscita' : ''}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isUser ? Colors.white : const Color(0xFF495057),
+                ),
+              ),
+            Text(
+              message.text,
+              style: TextStyle(
+                height: 1.4,
+                color: isUser ? Colors.white : const Color(0xFF212529),
+              ),
+            ),
+          ],
         ),
       ),
     );

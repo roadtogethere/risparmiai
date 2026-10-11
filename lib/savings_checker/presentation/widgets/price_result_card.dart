@@ -42,6 +42,9 @@ class PriceResultCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text(
+                'Analisi ${notifier.analysisNumber} · revisione ${price.analysis.revision}',
+              ),
               RecognizedFacts(analysis: price.analysis),
               const Divider(),
               const Text(

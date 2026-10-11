@@ -16,7 +16,14 @@ import '../../data/datasources/verified_price_store.dart';
 
 /// Unvalidated input plus the immutable context to replay, never economic data.
 class _PlannerAttempt {
-  const _PlannerAttempt(this.prompt, this.previous);
+  const _PlannerAttempt(
+    this.prompt,
+    this.previous,
+    this.analysisNumber,
+    this.turnId,
+  );
+  final int analysisNumber;
+  final int turnId;
   final String prompt;
   // Includes the local identity, revision, facts, question and accepted turns.
   final PlannerAnalysis? previous;
@@ -110,6 +117,9 @@ class SavingsChatNotifier extends ChangeNotifier {
   PlannerAnalysis? get plannerAnalysis => _plannerAnalysis;
   _PlannerAttempt? _failedAttempt;
   int _plannerGeneration = 0;
+  int _analysisNumber = 1;
+  int _nextTurnId = 0;
+  int get analysisNumber => _analysisNumber;
   bool get hasFailedPlannerTurn => _failedAttempt != null;
   bool get canRetryPlannerTurn =>
       hasFailedPlannerTurn && !_isLoading && !_isSaving;
@@ -127,6 +137,7 @@ class SavingsChatNotifier extends ChangeNotifier {
 
   void startNewAnalysis() {
     if (_isLoading || _isSaving) return;
+    _analysisNumber++;
     _plannerGeneration++;
     _failedAttempt = null;
     _plannerAnalysis = null;
@@ -151,6 +162,10 @@ class SavingsChatNotifier extends ChangeNotifier {
         ChatMessage(
           sender: ChatMessageSender.user,
           text: attempt.prompt,
+          analysisNumber: attempt.analysisNumber,
+          turnId: attempt.turnId,
+          analysisId: attempt.previous?.id,
+          contextRevision: attempt.previous?.revision,
           createdAt: DateTime.now(),
         ),
       );
@@ -172,6 +187,22 @@ class SavingsChatNotifier extends ChangeNotifier {
       );
       if (generation != _plannerGeneration) return;
       _plannerAnalysis = analysis;
+      final userIndex = _messages.indexWhere(
+        (m) => m.sender == ChatMessageSender.user && m.turnId == attempt.turnId,
+      );
+      if (userIndex >= 0) {
+        final message = _messages[userIndex];
+        _messages[userIndex] = ChatMessage(
+          sender: message.sender,
+          text: message.text,
+          createdAt: message.createdAt,
+          analysisNumber: attempt.analysisNumber,
+          turnId: attempt.turnId,
+          analysisId: analysis.id,
+          revision: analysis.revision,
+          contextRevision: attempt.previous?.revision,
+        );
+      }
       _failedAttempt = null;
       if (_plannerAnalysis!.result.status ==
           QuantityResolutionStatus.calculable) {
@@ -191,6 +222,10 @@ class SavingsChatNotifier extends ChangeNotifier {
             ChatMessage(
               sender: ChatMessageSender.assistant,
               text: _errorMessage!,
+              analysisNumber: attempt.analysisNumber,
+              turnId: attempt.turnId,
+              analysisId: analysis.id,
+              revision: analysis.revision,
               createdAt: DateTime.now(),
             ),
           );
@@ -200,6 +235,10 @@ class SavingsChatNotifier extends ChangeNotifier {
         ChatMessage(
           sender: ChatMessageSender.assistant,
           text: _plannerAnalysis!.message,
+          analysisNumber: attempt.analysisNumber,
+          turnId: attempt.turnId,
+          analysisId: analysis.id,
+          revision: analysis.revision,
           createdAt: DateTime.now(),
         ),
       );
@@ -218,6 +257,11 @@ class SavingsChatNotifier extends ChangeNotifier {
         ChatMessage(
           sender: ChatMessageSender.assistant,
           text: _errorMessage!,
+          analysisNumber: attempt.analysisNumber,
+          turnId: attempt.turnId,
+          analysisId: attempt.previous?.id,
+          contextRevision: attempt.previous?.revision,
+          failed: true,
           createdAt: DateTime.now(),
         ),
       );
@@ -249,7 +293,14 @@ class SavingsChatNotifier extends ChangeNotifier {
     }
 
     if (planner != null) {
-      await _analyzePlannerTurn(_PlannerAttempt(prompt, _plannerAnalysis));
+      await _analyzePlannerTurn(
+        _PlannerAttempt(
+          prompt,
+          _plannerAnalysis,
+          _analysisNumber,
+          ++_nextTurnId,
+        ),
+      );
       return;
     }
     // Legacy/demo path only.

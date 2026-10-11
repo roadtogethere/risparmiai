@@ -14,7 +14,7 @@
       "primary_unit": "pastiglia",
       "canonical_metric": "tablet",
       "average_unit_cost": 0.18,
-      "required_attributes": ["tabs_count"]
+      "required_attributes": [{"key": "tabs_count", "label": "Numero di pastiglie"}]
     },
     {
       "key": "laundry_detergent_liquid",

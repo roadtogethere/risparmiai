@@ -36,6 +36,10 @@ I log diagnostici riportano soltanto informazioni tecniche di configurazione/per
 
 ## Presentazione M5B.3
 
+I messaggi del planner mantengono gruppo di analisi e richiesta nella sessione; dopo una risposta elaborata riportano anche identità e revisione del planner. Gli errori conservano il riferimento al contesto precedente senza diventare revisioni elaborate. Le card riportano analisi/revisione e, dopo un fallimento, distinguono esplicitamente i fatti precedenti dalla richiesta fallita. Questi metadati non modificano la persistenza economica.
+
+Il default `tabs_count` usa la label `Numero di pastiglie`, conservando chiave e metrica `tablet`. Le categorie custom persistite continuano a prevalere: eventuali label legacy come `Tabs count` restano invariate, senza migrazioni o sovrascritture. `primary_unit` è solo presentazione; il prompt richiede la metrica canonica esatta negli operandi `direct`, senza alias nel resolver.
+
 `RecognizedFacts` mostra categoria, prezzo, fatti quantitativi e descrittivi. Riusa le label dello schema e separa visivamente parole di chiavi sconosciute; non riconosce prodotti e non inventa attributi. Il contratto live attuale non contiene un nome prodotto o una marca strutturati, quindi non li ricava dal testo libero.
 
 `PriceResultCard` separa costo comparabile, confronto con lo storico personale e salvataggio. `AnalysisDisplay` applica solo formattazione italiana: ad esempio `0,000833 €/strappo`, accompagnato da `Circa 0,83 € ogni 1.000 strappi`. L'equivalente è limitato a unità conteggiabili note e non entra nei calcoli o nella persistenza; unità fisiche o sconosciute mantengono la scala originale.

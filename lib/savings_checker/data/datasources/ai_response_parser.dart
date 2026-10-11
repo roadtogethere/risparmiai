@@ -11,6 +11,9 @@ Restituisci SOLO un oggetto JSON, senza markdown:
 Ometti proposal per categorie note. Per categorie nuove proposal contiene soltanto:
 display_name, canonical_metric (snake_case), primary_unit, required_attributes [{key,label}].
 Usa lo schema locale senza ridefinirlo. required_attributes non sono obblighi globali:
+canonical_metric è il codice tecnico autoritativo; primary_unit è solo un'etichetta di visualizzazione.
+Per direct, unit del fatto operando deve coincidere esattamente con canonical_metric.
+Non sostituire tablet con pastiglia, pastiglie o altre etichette localizzate.
 un totale dichiarato nella metrica canonica basta per direct.
 Operazioni: direct/convert con operand; multiply con operands di esattamente due chiavi facts.
 Esempio multiply: rolls_count {value:12,unit:"roll",source:"user_input"} e
