@@ -4,240 +4,212 @@ import 'package:provider/provider.dart';
 import '../../domain/entities/product_analysis.dart';
 import '../models/chat_message.dart';
 import '../notifiers/savings_chat_notifier.dart';
-import 'archive_page.dart';
 import '../widgets/price_result_card.dart';
+import '../widgets/recognized_facts.dart';
+import 'archive_page.dart';
 import 'verified_prices_page.dart';
 
-/// Pagina principale per la verifica del risparmio sui prodotti.
-/// Utilizza un [StatefulWidget] per gestire il controller del campo di testo locale.
 class SavingsCheckerPage extends StatefulWidget {
-  const SavingsCheckerPage({super.key});
+  const SavingsCheckerPage({super.key, this.isDemo = false});
+  final bool isDemo;
 
   @override
   State<SavingsCheckerPage> createState() => _SavingsCheckerPageState();
 }
 
 class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
-  // Controller per gestire l'input di testo dell'utente
   final TextEditingController _controller = TextEditingController();
+  final ScrollController _scroll = ScrollController();
+  // Presentation boundaries only; never passed to the planner or storage.
+  final Set<int> _productStarts = {0};
 
   @override
   void dispose() {
-    // Rilascio delle risorse del controller per evitare memory leak
     _controller.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  void _showLatest() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) _scroll.jumpTo(0);
+    });
+  }
+
+  void _newAnalysis(SavingsChatNotifier notifier) {
+    if (notifier.isLoading || notifier.isSaving) return;
+    notifier.startNewAnalysis();
+    _controller.clear();
+    setState(() => _productStarts.add(notifier.messages.length));
+    _showLatest();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Ascolta i cambiamenti in SavingsChatNotifier e ri-esegue il build all'aggiornamento
     final notifier = context.watch<SavingsChatNotifier>();
-    final theme = Theme.of(context);
+    final items = <Widget>[];
+    for (var i = 0; i <= notifier.messages.length; i++) {
+      if (_productStarts.contains(i) && notifier.planner != null) {
+        items.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'Nuovo prodotto · analisi ${_productStarts.toList().indexOf(i) + 1}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        );
+      }
+      if (i < notifier.messages.length) {
+        items.add(_message(notifier.messages[i]));
+      }
+    }
+    if (notifier.comparablePrice != null) {
+      items.add(PriceResultCard(notifier: notifier));
+    } else if (notifier.plannerAnalysis != null && !notifier.isLoading) {
+      // Keep the latest question/error below the facts, close to the input.
+      items.insert(
+        items.isEmpty ? 0 : items.length - 1,
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: RecognizedFacts(analysis: notifier.plannerAnalysis!),
+          ),
+        ),
+      );
+    }
+    if (notifier.analyzedProducts.isNotEmpty) {
+      items.add(_ProductInsightCard(products: notifier.analyzedProducts));
+    }
+    if (notifier.hasFailedPlannerTurn) {
+      items.add(
+        TextButton(
+          onPressed: notifier.canRetryPlannerTurn
+              ? () async {
+                  await notifier.retryLastPlannerTurn();
+                  _showLatest();
+                }
+              : null,
+          child: const Text('Riprova'),
+        ),
+      );
+    }
 
     return Scaffold(
-      backgroundColor: const Color(
-        0xFFF8F9FA,
-      ), // Sfondo neutro, pulito e moderno
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0.5,
         backgroundColor: Colors.white,
-        title: Text(
-          'Verifica Risparmio',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF1A1A1A),
-          ),
-        ),
         centerTitle: true,
-        actions: <Widget>[
-          if (notifier.planner != null)
-            IconButton(
-              onPressed: notifier.isLoading || notifier.isSaving
-                  ? null
-                  : notifier.startNewAnalysis,
-              tooltip: 'Nuova analisi',
-              icon: const Icon(Icons.add),
-            ),
-          // Pulsante per navigare alla schermata dell'Archivio
+        title: const Text(
+          'Verifica Risparmio',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1A1A1A),
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [
           IconButton(
-            icon: const Icon(
-              Icons.inventory_2_outlined,
-              color: Color(0xFF495057),
-            ),
+            icon: const Icon(Icons.inventory_2_outlined),
             tooltip: 'Archivio',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => notifier.planner != null
-                      ? const VerifiedPricesPage()
-                      : const ArchivePage(),
-                ),
-              );
-            },
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => notifier.planner != null
+                    ? const VerifiedPricesPage()
+                    : const ArchivePage(),
+              ),
+            ),
           ),
         ],
       ),
       body: SafeArea(
         child: Column(
-          children: <Widget>[
-            // --- SEZIONE 1: Cronologia della Chat ---
-            Expanded(
-              child: ListView.builder(
-                // Inverte l'ordine della lista: utile per le chat dove i nuovi messaggi compaiono in basso
-                reverse: true,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+          children: [
+            if (widget.isDemo)
+              Container(
+                width: double.infinity,
+                color: Theme.of(context).colorScheme.tertiaryContainer,
+                padding: const EdgeInsets.all(8),
+                child: const Text(
+                  'Modalità demo — dati simulati',
+                  textAlign: TextAlign.center,
                 ),
-                itemCount: notifier.messages.length,
-                itemBuilder: (context, index) {
-                  // Inverte l'indice per mostrare il messaggio più recente in fondo alla vista
-                  final message =
-                      notifier.messages[notifier.messages.length - 1 - index];
-                  final isUser = message.sender == ChatMessageSender.user;
-
-                  return Align(
-                    // Allinea i messaggi dell'utente a destra e quelli del bot a sinistra
-                    alignment: isUser
-                        ? Alignment.centerRight
-                        : Alignment.centerLeft,
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      constraints: BoxConstraints(
-                        // Limita la larghezza massima del bubble al 78% dello schermo
-                        maxWidth: MediaQuery.of(context).size.width * 0.78,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isUser ? const Color(0xFF0F62FE) : Colors.white,
-                        borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(16),
-                          topRight: const Radius.circular(16),
-                          // Smussa tre angoli e ne lascia uno più stretto per creare l'effetto "fumetto"
-                          bottomLeft: Radius.circular(isUser ? 16 : 4),
-                          bottomRight: Radius.circular(isUser ? 4 : 16),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Text(
-                        message.text,
-                        style: TextStyle(
-                          height: 1.4,
-                          fontSize: 15,
-                          color: isUser
-                              ? Colors.white
-                              : const Color(0xFF212529),
-                        ),
-                      ),
-                    ),
-                  );
-                },
               ),
-            ),
-
-            // --- SEZIONE 2: Card di Analisi (Rendering Condizionale) ---
-            if (notifier.hasFailedPlannerTurn)
-              TextButton(
-                onPressed: notifier.canRetryPlannerTurn
-                    ? notifier.retryLastPlannerTurn
-                    : null,
-                child: const Text('Riprova'),
+            if (notifier.planner != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Tooltip(
+                  message: 'Nuova analisi',
+                  child: TextButton.icon(
+                    onPressed: notifier.isLoading || notifier.isSaving
+                        ? null
+                        : () => _newAnalysis(notifier),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Nuova analisi'),
+                  ),
+                ),
               ),
-            if (notifier.comparablePrice != null)
-              PriceResultCard(notifier: notifier),
-            // Mostra la scheda del miglior prodotto solo se ci sono prodotti analizzati
-            if (notifier.analyzedProducts.isNotEmpty)
-              Padding(
+            Expanded(
+              child: ListView(
+                key: const ValueKey('conversation'),
+                controller: _scroll,
+                reverse: true,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
+                  horizontal: 12,
                   vertical: 8,
                 ),
-                child: _ProductInsightCard(products: notifier.analyzedProducts),
+                children: items.reversed.toList(),
               ),
-
-            // --- SEZIONE 3: Area di Input Testo ---
+            ),
             Container(
-              padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(
-                  top: BorderSide(color: Color(0xFFE9ECEF), width: 1),
-                ),
-              ),
+              color: Colors.white,
+              padding: const EdgeInsets.all(8),
               child: Row(
-                children: <Widget>[
-                  // Campo di testo per l'inserimento del prompt
+                children: [
                   Expanded(
                     child: TextField(
                       controller: _controller,
-                      style: const TextStyle(fontSize: 15),
+                      textInputAction: TextInputAction.send,
                       decoration: InputDecoration(
-                        hintText:
-                            'Confronta prodotti (es. detersivo, carta)...',
-                        hintStyle: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 14,
-                        ),
+                        labelText: 'Scrivi in chat',
+                        hintText: 'Descrivi un prodotto o correggi i dati',
                         filled: true,
                         fillColor: const Color(0xFFF1F3F5),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide.none,
                         ),
                       ),
-                      // Invio del messaggio tramite tastiera mobile
                       onSubmitted: (_) => _submitPrompt(context),
                     ),
                   ),
                   const SizedBox(width: 8),
-
-                  // Pulsante Invio / Indicatore di caricamento
-                  Material(
-                    color: const Color(0xFF0F62FE),
-                    borderRadius: BorderRadius.circular(24),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(24),
-                      // Disabilita il click se il notifier è in stato di caricamento
-                      onTap: notifier.isLoading || notifier.isSaving
+                  if (notifier.isLoading)
+                    const SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Padding(
+                        padding: EdgeInsets.all(12),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else
+                    IconButton.filled(
+                      tooltip: 'Invia',
+                      style: IconButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F62FE),
+                      ),
+                      onPressed: notifier.isSaving
                           ? null
                           : () => _submitPrompt(context),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: notifier.isLoading
-                            // Spinner di caricamento se la richiesta è in corso
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
-                                ),
-                              )
-                            // Icona invio standard
-                            : const Icon(
-                                Icons.send_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                      ),
+                      icon: const Icon(Icons.send_rounded),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -247,16 +219,45 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
     );
   }
 
-  /// Invia il prompt inserito al [SavingsChatNotifier] e pulisce il campo di testo
+  Widget _message(ChatMessage message) {
+    final isUser = message.sender == ChatMessageSender.user;
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.85,
+        ),
+        decoration: BoxDecoration(
+          color: isUser ? const Color(0xFF0F62FE) : Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isUser ? 16 : 4),
+            bottomRight: Radius.circular(isUser ? 4 : 16),
+          ),
+        ),
+        child: Text(
+          message.text,
+          style: TextStyle(
+            height: 1.4,
+            color: isUser ? Colors.white : const Color(0xFF212529),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _submitPrompt(BuildContext context) async {
     final notifier = context.read<SavingsChatNotifier>();
     if (notifier.isLoading || notifier.isSaving) return;
     final prompt = _controller.text;
     if (prompt.trim().isEmpty) return;
-
     _controller.clear();
-    // Invia il prompt al notifier senza bloccare l'interfaccia principale
-    await context.read<SavingsChatNotifier>().analyzeShoppingPrompt(prompt);
+    _showLatest();
+    await notifier.analyzeShoppingPrompt(prompt);
+    _showLatest();
   }
 }
 

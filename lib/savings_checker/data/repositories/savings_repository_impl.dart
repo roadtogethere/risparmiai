@@ -41,15 +41,11 @@ class SavingsRepositoryImpl implements SavingsRepository {
     }
 
     if (useMockData) {
-      debugPrint(
-        'Risparmiai repository: using mock data for prompt "$userPrompt"',
-      );
+      debugPrint('Risparmiai repository: using mock data');
       return _buildMockProductsForPrompt(userPrompt);
     }
 
-    debugPrint(
-      'Risparmiai repository: calling AI provider for prompt "$userPrompt"',
-    );
+    debugPrint('Risparmiai repository: calling legacy AI adapter');
 
     final aiClient = _aiClient;
     if (aiClient == null) throw StateError('AI provider is not configured.');

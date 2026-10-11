@@ -40,7 +40,7 @@ class _ArchivePageState extends State<ArchivePage> {
         scrolledUnderElevation: 0.5,
         backgroundColor: Colors.white,
         title: const Text(
-          'Archivio',
+          'Archivio precedente',
           style: TextStyle(
             fontWeight: FontWeight.w600,
             color: Color(0xFF1A1A1A),
@@ -73,10 +73,15 @@ class _ArchivePageState extends State<ArchivePage> {
               onRefresh: _reload,
               child: ListView.separated(
                 padding: const EdgeInsets.all(16),
-                itemCount: categories.length,
+                itemCount: categories.length + 1,
                 separatorBuilder: (_, _) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
-                  final category = categories[index];
+                  if (index == 0) {
+                    return const Text(
+                      'Aggregati precedenti non verificati. Non partecipano al confronto con i prezzi salvati esplicitamente.',
+                    );
+                  }
+                  final category = categories[index - 1];
                   return _ArchiveEntryCard(
                     category: category,
                     onDelete: () => _removeCategory(category.key),
@@ -109,7 +114,7 @@ class _EmptyArchiveState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Nessun prodotto salvato',
+              'Nessun aggregato precedente',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -118,7 +123,7 @@ class _EmptyArchiveState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Analizza un prodotto in chat e i risultati compariranno qui.',
+              'Questo archivio contiene solo aggregati precedenti non verificati. I nuovi prezzi si salvano con «Salva questo prezzo» e si trovano in «Prezzi salvati».',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
             ),

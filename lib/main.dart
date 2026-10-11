@@ -94,7 +94,7 @@ class MainApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Verifica Risparmio',
         debugShowCheckedModeBanner: false,
-        home: const SavingsCheckerPage(),
+        home: SavingsCheckerPage(isDemo: useMockData),
       ),
     );
   }
