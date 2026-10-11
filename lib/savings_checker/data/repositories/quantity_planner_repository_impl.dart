@@ -3,6 +3,7 @@ import 'dart:math';
 
 import '../../domain/entities/category_reference.dart';
 import '../../domain/entities/quantity_plan.dart';
+import '../../domain/entities/savings_failure.dart';
 import '../../domain/repositories/quantity_planner_repository.dart';
 import '../../domain/services/comparable_quantity_resolver.dart';
 import '../datasources/ai_savings_client.dart';
@@ -34,18 +35,27 @@ class QuantityPlannerRepositoryImpl implements QuantityPlannerRepository {
   }) async {
     if (input.trim().isEmpty) throw const FormatException('Empty user input.');
     final client = aiClient;
-    if (client == null) throw StateError('AI provider is not configured.');
-    final categories = <String, CategoryReference>{
-      ..._sessionSchemas,
-      for (final category in await _store.loadCategories())
-        category.key: category,
-    };
-    // Reuse schemas attached to explicitly saved verified observations after restart.
-    for (final saved in await const VerifiedPriceStore().read()) {
-      categories.putIfAbsent(
-        saved.price.categoryKey,
-        () => saved.price.analysis.schema,
-      );
+    if (client == null) {
+      throw const SavingsFailure(SavingsFailureKind.configurationError);
+    }
+    late Map<String, CategoryReference> categories;
+    try {
+      categories = <String, CategoryReference>{
+        ..._sessionSchemas,
+        for (final category in await _store.loadCategories())
+          category.key: category,
+      };
+      // Reuse schemas attached to explicitly saved verified observations after restart.
+      for (final saved in await const VerifiedPriceStore().read()) {
+        categories.putIfAbsent(
+          saved.price.categoryKey,
+          () => saved.price.analysis.schema,
+        );
+      }
+    } catch (_) {
+      // Unknown saved schemas may be authoritative. Never substitute empty
+      // history/defaults when their local source cannot be verified.
+      throw const SavingsFailure(SavingsFailureKind.storageError);
     }
     final turns = [...?previous?.userTurns, input.trim()];
     final request = jsonEncode({
@@ -76,9 +86,13 @@ class QuantityPlannerRepositoryImpl implements QuantityPlannerRepository {
           )
           .toList(),
     });
-    final parsed = QuantityPlanParser.parse(
-      await client.analyzeProductWithCatalog(request, catalog),
-    );
+    final payload = await client.analyzeProductWithCatalog(request, catalog);
+    late QuantityPlan parsed;
+    try {
+      parsed = QuantityPlanParser.parse(payload);
+    } catch (_) {
+      throw const SavingsFailure(SavingsFailureKind.parseError);
+    }
     if (previous != null && parsed.categoryKey != previous.schema.key) {
       throw const CategorySchemaMismatch(
         'A continuation cannot silently change category.',

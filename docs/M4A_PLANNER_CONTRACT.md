@@ -1,6 +1,6 @@
 # M4A — Planner e quantità comparabile
 
-Questo documento descrive M4A e, nella sezione finale, le estensioni M4B.
+Questo documento descrive M4A e le successive estensioni M4B e M5B.
 I limiti storici di M4A sulla sola quantità sono superati dal percorso M4B
 descritto sotto; il contratto AI rimane invariato.
 
@@ -262,3 +262,66 @@ Il recupero è solo in memoria e non sopravvive alla chiusura dell'app.
 timeout di entrambi i provider, retry iniziale e del completamento `500`, errori
 ripetuti, identità/revisioni, doppio tap, reset, risposte/errori tardivi, UI e
 assenza di scritture economiche.
+
+## M5B.2 — errori tipizzati e validazione dei fatti
+
+Questa sezione aggiorna la politica di retry M5B.1. `SavingsFailure` espone
+otto tipi e messaggi sicuri: `rateLimited` (429), `serviceUnavailable`
+(500/502/503/504), `timeout`, `networkError`, `authenticationError` (chiave
+mancante nel client o 401/403), `parseError`, `configurationError` (client non
+configurato o altri status HTTP non supportati), `storageError`.
+Il bootstrap esistente, quando non crea un client perché manca la chiave,
+raggiunge invece `configurationError`; il messaggio utente è lo stesso.
+Le eccezioni pubbliche e i messaggi non contengono URL, credenziali o body
+HTTP. I client live non stampano più prompt, payload o risposte grezze.
+Il parser mantiene il contratto stretto; i client traducono errori dell'envelope
+e del contenuto in `parseError`. Anche il repository protegge il confine di
+parsing per client alternativi. Un piano incompleto rimane uno stato di dominio,
+non un errore tecnico; un piano rifiutato dal resolver non attiva retry.
+
+Ogni invio manuale dispone al massimo di due tentativi HTTP: l'originale e
+un solo retry automatico, esclusivamente per 429 e 500/502/503/504.
+`requestTimeout` resta 30 secondi per tentativo; `totalRequestTimeout`, anch'esso
+30 secondi per default, comprende entrambi i tentativi e l'attesa. Ogni chiamata
+usa il minore tra timeout per tentativo e budget residuo. L'attesa minima è
+`retryDelay` (500 ms); `Retry-After` in secondi o data HTTP IMF-fixdate viene
+rispettato se maggiore. Se l'attesa non entra nel budget, l'errore HTTP viene
+restituito subito per il recupero manuale, senza anticipare il retry remoto.
+`automaticRetry: false` permette di disabilitare il retry automatico.
+
+Nessun retry automatico per timeout, parsing, autenticazione, configurazione,
+storage o piani incompleti/rifiutati. `http.ClientException` viene classificato
+come errore di rete ma non permette di dimostrarne la transitorietà (può anche
+rappresentare TLS o restrizioni del browser): per questi casi resta solo il
+retry manuale. Non vengono dedotte cause da stringhe interne del provider.
+Ogni tentativo riusa esattamente payload e header, con un client dedicato chiuso
+in `finally`. Valgono ancora i limiti M5B.1 della cancellazione fisica e le
+protezioni contro risposte tardive. Il limite riguarda l'HTTP, non le letture
+locali né il tempo di parsing sincrono. Non c'è retry automatico economico.
+
+Il notifier espone l'errore tipizzato e un messaggio operativo nella chat o
+nella conferma di salvataggio; il nuovo turno/reset/successo del retry ne
+elimina lo stato. «Riprova» conserva testo e contesto come in M5B.1. Dopo un
+fallimento di scrittura resta disponibile il salvataggio esplicito, senza
+dichiarare successo. Errori dell'archivio verificato sono visibili anche nella
+pagina dei prezzi salvati.
+
+Se il repository non riesce a leggere catalogo o osservazioni verificate,
+interrompe prima di chiamare l'AI con `storageError`. Non è dimostrabile che
+un catalogo parziale conservi l'autorità degli schemi custom: non viene
+introdotto un percorso degradato, né uno storico vuoto sostitutivo. Non ci sono
+migrazioni, reset o scritture di riparazione. Se fallisce soltanto la successiva
+lettura per il confronto, il costo già calcolato resta visibile, il salvataggio
+è disabilitato e il problema locale viene esplicitato.
+
+Tutti i fatti devono essere finiti. Prezzo e descrittori ammettono zero; solo
+gli operandi usati dal piano quantitativo devono essere strettamente positivi.
+I descrittori negativi restano rifiutati: il contratto non contiene una regola
+generale per provarne l'ammissibilità semantica. Nessuna eccezione dipende dalla
+categoria. Prezzo zero resta analizzabile ma non salvabile. Formule, metriche,
+comparazione e semantica dello storico restano invariate.
+
+`test/error_handling_test.dart` copre la classificazione sui due provider con
+HTTP simulato, retry limitato e manuale, budget, Retry-After, errori locali e
+validazione dei descrittori/operandi. I test M5B.1 isolano il retry manuale con
+`automaticRetry: false` e verificano il nuovo errore tipizzato di timeout.

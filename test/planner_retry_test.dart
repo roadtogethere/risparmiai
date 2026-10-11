@@ -8,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:risparmiai/savings_checker/data/datasources/ai_savings_client.dart';
+import 'package:risparmiai/savings_checker/domain/entities/savings_failure.dart';
 import 'package:risparmiai/savings_checker/data/datasources/gemini_savings_client.dart';
 import 'package:risparmiai/savings_checker/data/datasources/openai_savings_client.dart';
 import 'package:risparmiai/savings_checker/data/datasources/verified_price_store.dart';
@@ -63,11 +64,13 @@ AiSavingsClient providerClient(
     ? GeminiSavingsClient(
         apiKey: 'test-only',
         requestTimeout: timeout,
+        automaticRetry: false, // Isolate the M5B.1 manual-retry contract.
         httpClientFactory: factory,
       )
     : OpenAiSavingsClient(
         apiKey: 'test-only',
         requestTimeout: timeout,
+        automaticRetry: false,
         httpClientFactory: factory,
       );
 
@@ -102,7 +105,13 @@ void main() {
         );
         await expectLater(
           client.analyzeProductWithCatalog('input', '{}'),
-          throwsA(isA<TimeoutException>()),
+          throwsA(
+            isA<SavingsFailure>().having(
+              (e) => e.kind,
+              'kind',
+              SavingsFailureKind.timeout,
+            ),
+          ),
         );
         expect(transport.closed, isTrue);
         // Even a transport that ignores close cannot deliver this late result.

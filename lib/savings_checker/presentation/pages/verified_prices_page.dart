@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/datasources/verified_price_store.dart';
 import '../../domain/entities/price_analysis.dart';
+import '../../domain/entities/savings_failure.dart';
 import '../widgets/price_result_card.dart';
 import 'archive_page.dart';
 
@@ -34,8 +35,10 @@ class _VerifiedPricesPageState extends State<VerifiedPricesPage> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return const Center(
-            child: Text('Impossibile leggere i prezzi salvati.'),
+          return Center(
+            child: Text(
+              const SavingsFailure(SavingsFailureKind.storageError).message,
+            ),
           );
         }
         final observations = snapshot.data!.reversed.toList();

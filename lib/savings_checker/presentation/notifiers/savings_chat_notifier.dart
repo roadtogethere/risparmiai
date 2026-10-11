@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../domain/entities/product_analysis.dart';
 import '../../domain/entities/quantity_plan.dart';
+import '../../domain/entities/savings_failure.dart';
 import '../../domain/repositories/quantity_planner_repository.dart';
 import '../../domain/entities/category_reference.dart';
 import '../../domain/repositories/savings_repository.dart';
@@ -35,6 +36,8 @@ class SavingsChatNotifier extends ChangeNotifier {
   String? _savedRevision;
   bool _isSaving = false;
   String? _saveMessage;
+  SavingsFailure? _failure;
+  SavingsFailure? get failure => _failure;
   ComparablePrice? get comparablePrice => _price;
   PriceComparison? get priceComparison => _priceComparison;
   bool get isSaving => _isSaving;
@@ -53,6 +56,7 @@ class SavingsChatNotifier extends ChangeNotifier {
     final price = _price!;
     _isSaving = true;
     _saveMessage = null;
+    _failure = null;
     notifyListeners();
     try {
       final saved = await _priceHistory.save(price);
@@ -62,7 +66,9 @@ class SavingsChatNotifier extends ChangeNotifier {
           : 'Prezzo salvato.';
       // Keep the original comparison: saving must not make the price its own reference.
     } catch (_) {
-      _saveMessage = 'Salvataggio non riuscito. Puoi riprovare.';
+      _failure = const SavingsFailure(SavingsFailureKind.storageError);
+      _saveMessage =
+          '${_failure!.message} Salvataggio non riuscito. Puoi riprovare.';
     } finally {
       _isSaving = false;
       notifyListeners();
@@ -124,6 +130,7 @@ class SavingsChatNotifier extends ChangeNotifier {
     _plannerGeneration++;
     _failedAttempt = null;
     _plannerAnalysis = null;
+    _failure = null;
     _analyzedProducts.clear();
     _errorMessage = null;
     _price = null;
@@ -150,6 +157,7 @@ class SavingsChatNotifier extends ChangeNotifier {
     }
     _isLoading = true;
     _errorMessage = null;
+    _failure = null;
     _analyzedProducts.clear();
     _price = null;
     _priceComparison = null;
@@ -177,8 +185,15 @@ class SavingsChatNotifier extends ChangeNotifier {
           );
         } catch (_) {
           if (generation != _plannerGeneration) return;
-          _errorMessage =
-              'Costo calcolato, ma lo storico verificato non è disponibile. Salvataggio disabilitato.';
+          _failure = const SavingsFailure(SavingsFailureKind.storageError);
+          _errorMessage = '${_failure!.message} Salvataggio disabilitato.';
+          _messages.add(
+            ChatMessage(
+              sender: ChatMessageSender.assistant,
+              text: _errorMessage!,
+              createdAt: DateTime.now(),
+            ),
+          );
         }
       }
       _messages.add(
@@ -191,9 +206,14 @@ class SavingsChatNotifier extends ChangeNotifier {
     } catch (error) {
       if (generation != _plannerGeneration) return;
       _failedAttempt = attempt;
-      _errorMessage = error is TimeoutException
-          ? 'Il servizio sta impiegando troppo tempo a rispondere. Puoi riprovare.'
-          : 'Analisi non riuscita. Puoi riprovare.';
+      _failure = error is SavingsFailure
+          ? error
+          : SavingsFailure(
+              error is TimeoutException
+                  ? SavingsFailureKind.timeout
+                  : SavingsFailureKind.parseError,
+            );
+      _errorMessage = _failure!.message;
       _messages.add(
         ChatMessage(
           sender: ChatMessageSender.assistant,

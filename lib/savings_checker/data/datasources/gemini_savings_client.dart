@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../domain/entities/savings_failure.dart';
 
 import 'ai_response_parser.dart';
 import 'ai_savings_client.dart';
@@ -23,10 +23,16 @@ class GeminiSavingsClient implements AiSavingsClient {
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta',
     this.model = 'gemini-3.6-flash',
     this.requestTimeout = const Duration(seconds: 30),
+    this.totalRequestTimeout = const Duration(seconds: 30),
+    this.retryDelay = const Duration(milliseconds: 500),
+    this.automaticRetry = true,
     http.Client Function()? httpClientFactory,
   }) : _httpClientFactory = httpClientFactory ?? http.Client.new;
 
   final Duration requestTimeout;
+  final Duration totalRequestTimeout;
+  final Duration retryDelay;
+  final bool automaticRetry;
   final http.Client Function() _httpClientFactory;
 
   /// Chiave API usata per autenticare le richieste su Google AI Studio.
@@ -41,30 +47,22 @@ class GeminiSavingsClient implements AiSavingsClient {
   /// Analizza il prompt dell'utente e il catalogo prodotti tramite l'API Gemini.
   ///
   /// Processa l'input, invia una richiesta POST HTTP all'endpoint di generazione
-  /// ed estrae la risposta JSON validandola tramite [AiResponseParser].
+  /// ed estrae la risposta JSON validandola tramite [QuantityPlanParser].
   ///
-  /// Lancia un [StateError] se la API key manca, se il prompt è vuoto o non valido,
-  /// oppure se il server risponde con un codice di errore HTTP.
-  /// Lancia un [FormatException] se la struttura della risposta JSON non è valida.
+  /// Espone [SavingsFailure] per errori di trasporto, autenticazione e parsing.
   @override
   Future<Map<String, dynamic>> analyzeProductWithCatalog(
     String userPrompt,
     String catalogJson,
   ) async {
-    debugPrint('Gemini client: analyzeProductWithCatalog called');
-    debugPrint('Gemini client: model=$model, baseUrl=$baseUrl');
-    debugPrint('Gemini client: prompt="${userPrompt.trim()}"');
-
     // Controllo la presenza della chiave API
     if (apiKey == null || apiKey!.trim().isEmpty) {
-      debugPrint('Gemini client: API key missing');
-      throw StateError('Gemini API key is required to query the model.');
+      throw const SavingsFailure(SavingsFailureKind.authenticationError);
     }
 
     // Normalizzazione e validazione base del prompt utente
     final normalized = userPrompt.trim();
     if (normalized.isEmpty) {
-      debugPrint('Gemini client: empty prompt');
       throw StateError('User prompt cannot be empty.');
     }
 
@@ -72,52 +70,42 @@ class GeminiSavingsClient implements AiSavingsClient {
     final requestBody = buildRequestPayload(normalized, catalogJson);
     final uri = Uri.parse('$baseUrl/models/$model:generateContent?key=$apiKey');
 
-    debugPrint('Gemini client: request body=${json.encode(requestBody)}');
-
     // Esecuzione della chiamata API verso Google
     final response = await postAiRequest(
       uri,
       timeout: requestTimeout,
+      totalTimeout: totalRequestTimeout,
+      retryDelay: retryDelay,
+      automaticRetry: automaticRetry,
       clientFactory: _httpClientFactory,
       headers: <String, String>{'Content-Type': 'application/json'},
       body: json.encode(requestBody),
     );
 
-    debugPrint('Gemini client: status=${response.statusCode}');
-    debugPrint('Gemini client: raw response=${response.body}');
-
-    // Gestione dei codici di errore HTTP
-    if (response.statusCode != 200) {
-      if (response.statusCode == 404 || response.statusCode == 400) {
-        debugPrint(
-          'Gemini client: model "$model" is unavailable or rejected by this API version. Try a supported model such as gemini-2.0-flash.',
-        );
+    try {
+      // Parsing della risposta JSON dell'API Gemini
+      final responseBody = json.decode(response.body) as Map<String, dynamic>;
+      final candidates = responseBody['candidates'] as List<dynamic>?;
+      if (candidates == null || candidates.isEmpty) {
+        throw const FormatException('Gemini response has no candidates.');
       }
-      throw StateError(
-        'Gemini request failed with status ${response.statusCode}: ${response.body}',
-      );
-    }
 
-    // Parsing della risposta JSON dell'API Gemini
-    final responseBody = json.decode(response.body) as Map<String, dynamic>;
-    final candidates = responseBody['candidates'] as List<dynamic>?;
-    if (candidates == null || candidates.isEmpty) {
-      throw const FormatException('Gemini response has no candidates.');
-    }
+      final content = candidates.first['content'] as Map<String, dynamic>?;
+      final parts = content?['parts'] as List<dynamic>?;
+      if (parts == null || parts.isEmpty) {
+        throw const FormatException('Gemini response has no content parts.');
+      }
 
-    final content = candidates.first['content'] as Map<String, dynamic>?;
-    final parts = content?['parts'] as List<dynamic>?;
-    if (parts == null || parts.isEmpty) {
-      throw const FormatException('Gemini response has no content parts.');
-    }
+      final text = parts.first['text'];
+      if (text is! String || text.trim().isEmpty) {
+        throw const FormatException('Gemini response text is empty.');
+      }
 
-    final text = parts.first['text'];
-    if (text is! String || text.trim().isEmpty) {
-      throw const FormatException('Gemini response text is empty.');
+      // Conversione del testo restituito dal modello in una mappa strutturata
+      return QuantityPlanParser.decode(text);
+    } catch (_) {
+      throw const SavingsFailure(SavingsFailureKind.parseError);
     }
-
-    // Conversione del testo restituito dal modello in una mappa strutturata
-    return QuantityPlanParser.decode(text);
   }
 
   /// Costruisce la struttura dati della mappa JSON da inviare nel corpo della richiesta REST a Gemini.

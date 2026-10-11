@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../domain/entities/savings_failure.dart';
 
 import 'ai_response_parser.dart';
 import 'ai_savings_client.dart';
@@ -13,10 +13,16 @@ class OpenAiSavingsClient implements AiSavingsClient {
     this.apiKey,
     this.baseUrl = 'https://api.openai.com/v1',
     this.requestTimeout = const Duration(seconds: 30),
+    this.totalRequestTimeout = const Duration(seconds: 30),
+    this.retryDelay = const Duration(milliseconds: 500),
+    this.automaticRetry = true,
     http.Client Function()? httpClientFactory,
   }) : _httpClientFactory = httpClientFactory ?? http.Client.new;
 
   final Duration requestTimeout;
+  final Duration totalRequestTimeout;
+  final Duration retryDelay;
+  final bool automaticRetry;
   final http.Client Function() _httpClientFactory;
 
   final String? apiKey;
@@ -34,7 +40,7 @@ class OpenAiSavingsClient implements AiSavingsClient {
     String catalogJson,
   ) async {
     if (apiKey == null || apiKey!.trim().isEmpty) {
-      throw StateError('OpenAI API key is required to query the model.');
+      throw const SavingsFailure(SavingsFailureKind.authenticationError);
     }
 
     final normalized = userPrompt.trim();
@@ -46,6 +52,9 @@ class OpenAiSavingsClient implements AiSavingsClient {
     final response = await postAiRequest(
       Uri.parse('$baseUrl/chat/completions'),
       timeout: requestTimeout,
+      totalTimeout: totalRequestTimeout,
+      retryDelay: retryDelay,
+      automaticRetry: automaticRetry,
       clientFactory: _httpClientFactory,
       headers: <String, String>{
         'Content-Type': 'application/json',
@@ -54,28 +63,23 @@ class OpenAiSavingsClient implements AiSavingsClient {
       body: json.encode(requestBody),
     );
 
-    debugPrint('OpenAI status=${response.statusCode}');
-    debugPrint('OpenAI raw response=${response.body}');
+    try {
+      final responseBody = json.decode(response.body) as Map<String, dynamic>;
+      final choices = responseBody['choices'] as List<dynamic>?;
+      if (choices == null || choices.isEmpty) {
+        throw const FormatException('OpenAI response has no choices.');
+      }
 
-    if (response.statusCode != 200) {
-      throw StateError(
-        'OpenAI request failed with status ${response.statusCode}: ${response.body}',
-      );
+      final message = choices.first['message'] as Map<String, dynamic>?;
+      final content = message?['content'];
+      if (content is! String || content.trim().isEmpty) {
+        throw const FormatException('OpenAI response content is empty.');
+      }
+
+      return QuantityPlanParser.decode(content);
+    } catch (_) {
+      throw const SavingsFailure(SavingsFailureKind.parseError);
     }
-
-    final responseBody = json.decode(response.body) as Map<String, dynamic>;
-    final choices = responseBody['choices'] as List<dynamic>?;
-    if (choices == null || choices.isEmpty) {
-      throw const FormatException('OpenAI response has no choices.');
-    }
-
-    final message = choices.first['message'] as Map<String, dynamic>?;
-    final content = message?['content'];
-    if (content is! String || content.trim().isEmpty) {
-      throw const FormatException('OpenAI response content is empty.');
-    }
-
-    return QuantityPlanParser.decode(content);
   }
 
   Future<List<Map<String, dynamic>>> analyzeShoppingPrompt(

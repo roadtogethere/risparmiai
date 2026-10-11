@@ -34,7 +34,10 @@ class ComparableQuantityResolver {
     }
     for (final entry in plan.facts.entries) {
       final value = entry.value.value;
-      if (!value.isFinite || (entry.key == 'price' ? value < 0 : value <= 0)) {
+      final isOperand = plan.operation?.operands.contains(entry.key) == true;
+      // Descriptors may be zero. Negative descriptors have no generally
+      // verifiable semantics in this contract, so remain conservatively invalid.
+      if (!value.isFinite || value < 0 || (isOperand && value == 0)) {
         return const ComparableQuantityResult.rejected('invalid_fact_value');
       }
     }
