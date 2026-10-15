@@ -32,6 +32,7 @@ class QuantityPlannerRepositoryImpl implements QuantityPlannerRepository {
   Future<PlannerAnalysis> analyzeTurn(
     String input, {
     PlannerAnalysis? previous,
+    List<Map<String, String>> clarificationTurns = const [],
   }) async {
     if (input.trim().isEmpty) throw const FormatException('Empty user input.');
     final client = aiClient;
@@ -59,7 +60,10 @@ class QuantityPlannerRepositoryImpl implements QuantityPlannerRepository {
     }
     final turns = [...?previous?.userTurns, input.trim()];
     final request = jsonEncode({
+      'current_user_input': input.trim(),
       'user_turns': turns,
+      if (clarificationTurns.isNotEmpty)
+        'clarification_turns': clarificationTurns,
       if (previous != null)
         'current_analysis': {
           'category_key': previous.schema.key,
@@ -88,17 +92,33 @@ class QuantityPlannerRepositoryImpl implements QuantityPlannerRepository {
     });
     final payload = await client.analyzeProductWithCatalog(request, catalog);
     late QuantityPlan parsed;
+    late ConversationIntent intent;
     try {
+      // Stored legacy plans may omit intent. A live conversational response
+      // must explicitly decide the boundary before it can reuse any context.
+      if (previous != null && !payload.containsKey('intent')) {
+        throw const FormatException('Conversation intent is required.');
+      }
+      intent = QuantityPlanParser.intent(payload);
+      if (intent == ConversationIntent.clarify) {
+        throw PlannerClarification(
+          QuantityPlanParser.clarificationQuestion(payload),
+        );
+      }
       parsed = QuantityPlanParser.parse(payload);
+    } on PlannerClarification {
+      rethrow;
     } catch (_) {
       throw const SavingsFailure(SavingsFailureKind.parseError);
     }
-    if (previous != null && parsed.categoryKey != previous.schema.key) {
+    final startsNew = intent == ConversationIntent.newProduct;
+    final context = startsNew ? null : previous;
+    if (context != null && parsed.categoryKey != context.schema.key) {
       throw const CategorySchemaMismatch(
         'A continuation cannot silently change category.',
       );
     }
-    if (previous == null &&
+    if (context == null &&
         parsed.facts.values.any(
           (f) => f.source == FactSource.userConfirmation,
         )) {
@@ -118,7 +138,7 @@ class QuantityPlannerRepositoryImpl implements QuantityPlannerRepository {
     final plan = QuantityPlan(
       status: parsed.status,
       categoryKey: parsed.categoryKey,
-      facts: {...?previous?.plan.facts, ...parsed.facts},
+      facts: {...?context?.plan.facts, ...parsed.facts},
       proposal: parsed.proposal,
       operation: parsed.operation,
       missing: parsed.missing,
@@ -129,12 +149,26 @@ class QuantityPlannerRepositoryImpl implements QuantityPlannerRepository {
       _sessionSchemas[schema.key] = schema;
     }
     return PlannerAnalysis(
-      id: previous?.id ?? _newId(),
-      revision: (previous?.revision ?? 0) + 1,
+      id: context?.id ?? _newId(),
+      revision: (context?.revision ?? 0) + 1,
+      intent: intent,
       plan: plan,
       schema: schema,
       result: result,
-      userTurns: turns,
+      userTurns: startsNew
+          ? [
+              ...clarificationTurns
+                  .where((t) => t['role'] == 'user')
+                  .map((t) => t['text']!),
+              input.trim(),
+            ]
+          : [
+              ...?previous?.userTurns,
+              ...clarificationTurns
+                  .where((t) => t['role'] == 'user')
+                  .map((t) => t['text']!),
+              input.trim(),
+            ],
     );
   }
 }

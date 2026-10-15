@@ -2,6 +2,14 @@ import 'category_reference.dart';
 
 enum PlannerStatus { sufficient, needsInformation }
 
+enum ConversationIntent { continueProduct, correct, newProduct, clarify }
+
+/// Conversational question, never a validated revision or a provider failure.
+class PlannerClarification implements Exception {
+  PlannerClarification(this.question);
+  final String question;
+}
+
 enum FactSource { userInput, userConfirmation, aiSuggestion, externalLookup }
 
 class QuantityFact {
@@ -98,12 +106,14 @@ class PlannerAnalysis {
   PlannerAnalysis({
     required this.id,
     this.revision = 1,
+    this.intent = ConversationIntent.continueProduct,
     required this.plan,
     required this.schema,
     required this.result,
     required List<String> userTurns,
   }) : userTurns = List.unmodifiable(userTurns);
   final String id;
+  final ConversationIntent intent;
   final int revision;
   final QuantityPlan plan;
   final CategoryReference schema;

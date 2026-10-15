@@ -21,12 +21,14 @@ class _PlannerAttempt {
     this.previous,
     this.analysisNumber,
     this.turnId,
+    this.clarificationTurns,
   );
   final int analysisNumber;
   final int turnId;
   final String prompt;
   // Includes the local identity, revision, facts, question and accepted turns.
   final PlannerAnalysis? previous;
+  final List<Map<String, String>> clarificationTurns;
 }
 
 class SavingsChatNotifier extends ChangeNotifier {
@@ -52,6 +54,7 @@ class SavingsChatNotifier extends ChangeNotifier {
       _price != null && _savedRevision == _price!.observationId;
   String? get saveMessage => _saveMessage;
   bool get canSavePrice =>
+      _clarificationTurns.isEmpty &&
       !_isLoading &&
       !_isSaving &&
       !priceSaved &&
@@ -114,6 +117,7 @@ class SavingsChatNotifier extends ChangeNotifier {
   final SavingsRepository _repository;
   final QuantityPlannerRepository? planner;
   PlannerAnalysis? _plannerAnalysis;
+  List<Map<String, String>> _clarificationTurns = [];
   PlannerAnalysis? get plannerAnalysis => _plannerAnalysis;
   _PlannerAttempt? _failedAttempt;
   int _plannerGeneration = 0;
@@ -141,6 +145,7 @@ class SavingsChatNotifier extends ChangeNotifier {
     _plannerGeneration++;
     _failedAttempt = null;
     _plannerAnalysis = null;
+    _clarificationTurns = [];
     _failure = null;
     _analyzedProducts.clear();
     _errorMessage = null;
@@ -156,6 +161,9 @@ class SavingsChatNotifier extends ChangeNotifier {
     bool appendUserMessage = true,
   }) async {
     final generation = ++_plannerGeneration;
+    final previousPrice = _price;
+    final previousComparison = _priceComparison;
+    final previousSaveMessage = _saveMessage;
     if (appendUserMessage) {
       _failedAttempt = null;
       _messages.add(
@@ -177,15 +185,23 @@ class SavingsChatNotifier extends ChangeNotifier {
     _price = null;
     _priceComparison = null;
     _saveMessage = null;
-    // Keep the current analysis available for explicit corrections too.
-    // A separate product starts through startNewAnalysis(), without heuristics.
+    // Retain the authoritative context until the planner resolves the intention.
     notifyListeners();
     try {
       final analysis = await planner!.analyzeTurn(
         attempt.prompt,
         previous: attempt.previous,
+        clarificationTurns: attempt.clarificationTurns,
       );
       if (generation != _plannerGeneration) return;
+      _clarificationTurns = [];
+      final changedProduct =
+          attempt.previous != null && analysis.id != attempt.previous!.id;
+      if (changedProduct) {
+        _analysisNumber++;
+        _savedRevision = null;
+      }
+      final resolvedNumber = _analysisNumber;
       _plannerAnalysis = analysis;
       final userIndex = _messages.indexWhere(
         (m) => m.sender == ChatMessageSender.user && m.turnId == attempt.turnId,
@@ -196,11 +212,11 @@ class SavingsChatNotifier extends ChangeNotifier {
           sender: message.sender,
           text: message.text,
           createdAt: message.createdAt,
-          analysisNumber: attempt.analysisNumber,
+          analysisNumber: resolvedNumber,
           turnId: attempt.turnId,
           analysisId: analysis.id,
           revision: analysis.revision,
-          contextRevision: attempt.previous?.revision,
+          contextRevision: changedProduct ? null : attempt.previous?.revision,
         );
       }
       _failedAttempt = null;
@@ -222,7 +238,7 @@ class SavingsChatNotifier extends ChangeNotifier {
             ChatMessage(
               sender: ChatMessageSender.assistant,
               text: _errorMessage!,
-              analysisNumber: attempt.analysisNumber,
+              analysisNumber: resolvedNumber,
               turnId: attempt.turnId,
               analysisId: analysis.id,
               revision: analysis.revision,
@@ -235,10 +251,32 @@ class SavingsChatNotifier extends ChangeNotifier {
         ChatMessage(
           sender: ChatMessageSender.assistant,
           text: _plannerAnalysis!.message,
-          analysisNumber: attempt.analysisNumber,
+          analysisNumber: resolvedNumber,
           turnId: attempt.turnId,
           analysisId: analysis.id,
           revision: analysis.revision,
+          createdAt: DateTime.now(),
+        ),
+      );
+    } on PlannerClarification catch (clarification) {
+      if (generation != _plannerGeneration) return;
+      _failedAttempt = null;
+      _price = previousPrice;
+      _priceComparison = previousComparison;
+      _saveMessage = previousSaveMessage;
+      _clarificationTurns = [
+        ...attempt.clarificationTurns,
+        {'role': 'user', 'text': attempt.prompt},
+        {'role': 'assistant', 'text': clarification.question},
+      ];
+      _messages.add(
+        ChatMessage(
+          sender: ChatMessageSender.assistant,
+          text: clarification.question,
+          analysisNumber: _analysisNumber,
+          turnId: attempt.turnId,
+          analysisId: attempt.previous?.id,
+          contextRevision: attempt.previous?.revision,
           createdAt: DateTime.now(),
         ),
       );
@@ -299,6 +337,7 @@ class SavingsChatNotifier extends ChangeNotifier {
           _plannerAnalysis,
           _analysisNumber,
           ++_nextTurnId,
+          List.unmodifiable(_clarificationTurns),
         ),
       );
       return;

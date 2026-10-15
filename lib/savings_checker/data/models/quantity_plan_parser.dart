@@ -9,12 +9,18 @@ class QuantityPlanParser {
   static Map<String, dynamic> decode(String text) {
     final decoded = jsonDecode(text);
     final map = _map(decoded);
-    parse(map);
+    if (intent(map) == ConversationIntent.clarify) {
+      clarificationQuestion(map);
+    } else {
+      parse(map);
+    }
     return map;
   }
 
   static QuantityPlan parse(Map<String, dynamic> json) {
+    intent(json);
     _keys(json, {
+      'intent',
       'status',
       'category',
       'facts',
@@ -117,6 +123,24 @@ class QuantityPlanParser {
       missing: rawMissing.map(_text).toSet().toList(),
       question: json['question'] == null ? null : _text(json['question']),
     );
+  }
+
+  // Omission preserves old stored plans and existing integrations; it never
+  // authorizes a category change or an automatic new product.
+  static ConversationIntent intent(Map<String, dynamic> json) =>
+      switch (json['intent']) {
+        null when !json.containsKey('intent') =>
+          ConversationIntent.continueProduct,
+        'continue' => ConversationIntent.continueProduct,
+        'correct' => ConversationIntent.correct,
+        'new_product' => ConversationIntent.newProduct,
+        'clarify' => ConversationIntent.clarify,
+        _ => throw const FormatException('Invalid conversation intent.'),
+      };
+
+  static String clarificationQuestion(Map<String, dynamic> json) {
+    _keys(json, {'intent', 'question'});
+    return _text(json['question']);
   }
 
   static Map<String, dynamic> _map(dynamic value) {

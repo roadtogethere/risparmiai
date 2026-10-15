@@ -24,7 +24,7 @@ L'AI interpreta il linguaggio, raccoglie fatti, propone operazioni e richiede in
 7. `PriceComparisonService` confronta il costo con le osservazioni già presenti in `VerifiedPriceStore`, per categoria/metrica. Nessuno storico significa convenienza non valutabile; l'osservazione corrente non è inclusa.
 8. Soltanto **Salva questo prezzo** chiama `saveCurrentPrice`: il salvataggio è idempotente per identità/revisione. Non registra acquisti. Il prezzo zero non è salvabile.
 
-Una correzione mantiene l'identità corrente e aggiorna la revisione. Le osservazioni già salvate sono immutabili: salvare una revisione successiva richiede un'altra azione esplicita. **Nuova analisi** azzera il contesto corrente e lo stato di salvataggio, conservando i prezzi persistiti.
+Una correzione mantiene l'identità corrente e aggiorna la revisione. Le osservazioni già salvate sono immutabili: salvare una revisione successiva richiede un'altra azione esplicita. Il planner propone `continue`, `correct`, `new_product` o `clarify` nella stessa risposta JSON. Dart assegna un nuovo ID e isola i fatti per `new_product`, anche nella stessa categoria; `clarify` chiede conferma senza cambiare l'analisi corrente. **Nuova analisi** resta disponibile e azzera il contesto corrente e lo stato di salvataggio, conservando i prezzi persistiti.
 
 ## Errori e recupero
 

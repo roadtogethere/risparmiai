@@ -35,6 +35,7 @@ Map<String, dynamic> plan({
   double value = 1.5,
   String? observed,
 }) => {
+  'intent': 'continue',
   'status': 'sufficient',
   'category': {
     'key': key,
@@ -53,6 +54,7 @@ Map<String, dynamic> plan({
 };
 
 Map<String, dynamic> paper({bool complete = true}) => {
+  'intent': 'continue',
   'status': complete ? 'sufficient' : 'needs_information',
   'category': <String, dynamic>{'key': 'toilet_paper'},
   'facts': <String, dynamic>{

@@ -2,7 +2,7 @@
 
 Questo documento descrive M4A e le successive estensioni M4B, M5B e M4C.
 I limiti storici di M4A sulla sola quantità sono superati dal percorso M4B
-descritto sotto; il contratto AI rimane invariato.
+descritto sotto; M4C conserva le operazioni matematiche del contratto AI.
 
 ## Percorso attivo
 
@@ -20,9 +20,56 @@ legacy. OpenAI e Gemini usano lo stesso prompt e parser M4A nelle chiamate live.
 
 ## Contratto effettivo
 
-Sono ammessi soltanto `status`, `category`, `facts`, `operation`, `missing` e
+Sono ammessi soltanto `intent`, `status`, `category`, `facts`, `operation`, `missing` e
 `question`. `missing` e `question` sono facoltativi. `operation` è obbligatorio,
 ma può essere null quando il piano non è ancora determinabile.
+
+### Intenzione conversazionale
+
+Il planner esistente propone `intent` nella stessa risposta, senza un secondo
+classificatore: `continue` aggiunge dati, `correct` corregge il prodotto corrente,
+`new_product` avvia un altro prodotto anche nella stessa categoria. Non esistono
+euristiche Dart sui nomi. Il primo prodotto può usare `new_product`.
+Il parser accetta l'omissione come `continue` per leggere piani precedenti e
+osservazioni già salvate. Il repository invece rifiuta una risposta live senza
+`intent` quando esiste un'analisi corrente: nessun merge, nuova revisione o prezzo
+salvabile. Valori diversi sono rifiutati. Il messaggio corrente è inviato anche
+come `current_user_input`, distinto dal contesto precedente.
+
+In caso di ambiguità la risposta è soltanto
+`{"intent":"clarify","question":"Si tratta del prodotto corrente o di uno nuovo?"}`.
+Non contiene un piano modificato. La domanda non è un errore provider e non
+produce identità, revisioni, quantità o scritture. Il notifier conserva l'analisi,
+il confronto e lo stato di salvataggio e invia domanda/risposta pendenti come
+`clarification_turns` al prossimo tentativo, incluso il retry.
+Finché il chiarimento è pendente il salvataggio è disabilitato, anche se la
+precedente analisi aveva un prezzo valido non ancora salvato.
+
+Con `continue`/`correct`, Dart conserva ID e fatti omessi, incrementa la revisione
+e impedisce il cambio categoria implicito. Con `new_product`, Dart crea un nuovo
+ID e revisione 1, usa solo i fatti del nuovo piano e risolve lo schema dal catalogo
+autoritativo, senza ereditare quello precedente. Il contesto dei turni viene
+riavviato. Il notifier assegna un nuovo gruppo chat e azzera lo stato salvato.
+Nessuna transizione scrive lo storico: il salvataggio resta esplicito.
+
+Il retry conserva input e contesto originali, senza duplicare il messaggio utente;
+una transizione viene applicata solo al successo. Le guardie di generazione e
+l'azione esplicita Nuova analisi restano attive. Nessuna risposta classificata
+`clarify` o fallita diventa una revisione economica.
+
+`test/conversation_intent_test.dart` verifica con AI simulata cambi fra categorie
+e nella stessa categoria, continuazione/correzione, ambiguità e risoluzione,
+isolamento dei fatti, salvataggio precedente immutato, errori/retry, reset e
+risposte tardive. La precisione semantica del modello non è dimostrata dai test
+deterministici: anche l'intenzione, come la provenienza, è proposta dall'AI.
+
+`test/product_category_regression_test.dart` attraversa client Gemini con HTTP
+simulato, parser, repository, notifier, card e pulsante di salvataggio. Riproduce
+la falla della risposta senza intent con categoria precedente e numeri nuovi;
+copre biscotti/patatine in entrambi i versi, prima/dopo salvataggio, due prodotti
+della stessa categoria e ambiguità. Verifica anche la category key serializzata.
+Non è una registrazione della risposta originale Android: senza quel JSON non
+si può distinguere un intent omesso da una classificazione AI esplicita errata.
 
 Ogni fatto richiede un valore JSON numerico, un codice unità e `source`.
 `per` rappresenta una relazione quantitativa. Le origini rappresentabili sono
@@ -92,12 +139,13 @@ rami per categoria.
 Il notifier conserva l'analisi incompleta. Il turno `500` è inviato al planner
 con i turni precedenti, i fatti, l'operazione e la domanda. Il nuovo piano viene
 validato, i fatti precedenti omessi sono conservati e l'identità resta locale.
-La categoria non può cambiare implicitamente nel completamento. Il pulsante
+La categoria non può cambiare implicitamente in continue/correct. Il pulsante
 "Nuova analisi" abbandona esplicitamente il contesto corrente. Il doppio invio
 durante una richiesta è bloccato. Anche dopo un risultato calcolabile, il
 contesto rimane disponibile per correzioni: il nuovo valore della stessa chiave
 sostituisce quello precedente e la quantità viene rivalidata e ricalcolata.
-Per un prodotto diverso si usa "Nuova analisi", senza euristiche Dart sul testo.
+Un altro prodotto può iniziare tramite intent new_product o "Nuova analisi",
+senza euristiche Dart sul testo.
 
 Il prompt richiede tutti i fatti numerici dichiarati, non soltanto gli operandi:
 prezzo e caratteristiche descrittive come il numero di veli devono restare in
