@@ -107,12 +107,12 @@ class OpenAiSavingsClient implements AiSavingsClient {
     final userText = buildUserPromptWithCatalog(userPrompt, catalogJson);
 
     return <String, dynamic>{
-      'model': 'gpt-4o-mini',
+      'model': 'gpt-6-luna',
       'messages': <Map<String, String>>[
         <String, String>{'role': 'system', 'content': systemPrompt},
         <String, String>{'role': 'user', 'content': userText},
       ],
-      'temperature': 0.1,
+      'reasoning_effort': 'none',
     };
   }
 }
