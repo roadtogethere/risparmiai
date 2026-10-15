@@ -93,15 +93,32 @@ class ComparableQuantityResolver {
         quantity = a.value * (from.$2 / to.$2);
       case 'multiply':
         final b = plan.facts[op.operands.last]!;
-        final compatible =
-            (a.per == null && b.per == a.unit && b.unit == metric) ||
-            (b.per == null && a.per == b.unit && a.unit == metric);
-        if (!compatible || a.unit == 'EUR' || b.unit == 'EUR') {
+        final QuantityFact ratio;
+        if (a.per == null && b.per == a.unit) {
+          ratio = b;
+        } else if (b.per == null && a.per == b.unit) {
+          ratio = a;
+        } else {
+          return const ComparableQuantityResult.rejected(
+            'incompatible_dimensions',
+          );
+        }
+        final from = _units[ratio.unit];
+        final to = _units[metric];
+        final sameMetric = ratio.unit == metric;
+        if (a.unit == 'EUR' ||
+            b.unit == 'EUR' ||
+            (!sameMetric && (from == null || to == null || from.$1 != to.$1))) {
           return const ComparableQuantityResult.rejected(
             'incompatible_dimensions',
           );
         }
         quantity = a.value * b.value;
+        // Reject an unrepresentable product before applying a physical scale.
+        if (!quantity.isFinite || quantity <= 0) {
+          return const ComparableQuantityResult.rejected('invalid_quantity');
+        }
+        if (!sameMetric) quantity *= from!.$2 / to!.$2;
       default:
         return const ComparableQuantityResult.rejected('unsupported_operation');
     }

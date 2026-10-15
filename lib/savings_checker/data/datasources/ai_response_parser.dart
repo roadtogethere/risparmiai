@@ -11,6 +11,16 @@ Restituisci SOLO un oggetto JSON, senza markdown:
 Ometti proposal per categorie note. Per categorie nuove proposal contiene soltanto:
 display_name, canonical_metric (snake_case), primary_unit, required_attributes [{key,label}].
 Usa lo schema locale senza ridefinirlo. required_attributes non sono obblighi globali:
+Per categorie nuove scegli la metrica economicamente significativa: per prodotti
+venduti a peso preferisci massa normalizzata, generalmente kilogram; per liquidi
+volume normalizzato, generalmente liter; per prodotti consumati come unità discrete
+il conteggio significativo. Sono preferenze semantiche, non un catalogo chiuso:
+puoi proporre nuove categorie e metriche. Lo schema locale noto prevale sempre.
+Per quantità derivate identifica la relazione tra conteggio e quantità per unità.
+Il numero di contenitori non ne determina la capacità: non assumere formati standard.
+Se serve il volume per contenitore e non è dichiarato, chiedilo conservando prezzo
+e conteggio. Una capacità proposta dall'AI è ai_suggestion, mai un fatto confermato;
+usala soltanto dopo esplicita conferma utente. Non inventare informazioni mancanti.
 canonical_metric è il codice tecnico autoritativo; primary_unit è solo un'etichetta di visualizzazione.
 Per direct, unit del fatto operando deve coincidere esattamente con canonical_metric.
 Non sostituire tablet con pastiglia, pastiglie o altre etichette localizzate.
@@ -20,6 +30,9 @@ Esempio multiply: rolls_count {value:12,unit:"roll",source:"user_input"} e
 sheets_per_roll {value:200,unit:"sheet",per:"roll",source:"user_input"}.
 Non calcolare totali, costi, medie, risparmi o convenienza. Non includere altri campi.
 Non fornire fattori di conversione: Dart supporta milliliter/liter e gram/kilogram.
+multiply può convertire il risultato nella metrica canonica usando solo queste
+conversioni fisiche locali. Conserva valori e unità dichiarati nei facts, senza
+precalcolare o normalizzare i numeri: Dart moltiplica e converte il risultato.
 Numeri solo nei facts; ogni fatto richiede value numerico, unit, source e per solo per rapporti.
 Conserva TUTTI i fatti numerici dichiarati, incluso il prezzo e le caratteristiche
 descrittive non usate nell'operazione, anche con needs_information e operation null.

@@ -1,6 +1,6 @@
 # M4A — Planner e quantità comparabile
 
-Questo documento descrive M4A e le successive estensioni M4B e M5B.
+Questo documento descrive M4A e le successive estensioni M4B, M5B e M4C.
 I limiti storici di M4A sulla sola quantità sono superati dal percorso M4B
 descritto sotto; il contratto AI rimane invariato.
 
@@ -127,6 +127,33 @@ Per categorie sconosciute `category.proposal` deve contenere:
 Lo schema viene validato con M3 e mantenuto in memoria per la sessione del
 repository. Gli schemi salvati su disco restano autoritativi. Le nuove proposte
 non vengono ancora persistite: il riavvio perde questi schemi e le conversazioni.
+
+## Estensione M4C — quantità comparabili generali
+
+Per categorie nuove il prompt preferisce una metrica economicamente significativa:
+generalmente kilogram per prodotti venduti a peso, liter per liquidi, conteggio
+significativo per unità discrete. Sono preferenze semantiche open-world, non un
+catalogo di prodotti. Gli schemi locali restano sempre autoritativi.
+
+MULTIPLY verifica prima la relazione conteggio × quantità per unità; può poi
+convertire l'unità risultante nella metrica canonica esclusivamente mediante il
+registro fisico locale già usato da CONVERT. Per esempio, 6 can × 330
+milliliter/can produce 1980 milliliter e quindi 1,98 liter. Il JSON resta quello
+esistente: due operandi, nessuna sequenza, fattore AI o operazione annidata.
+Prodotto intermedio e quantità finale devono essere finiti e positivi.
+
+La capacità dei contenitori non si deduce dal loro conteggio o da formati standard.
+Se manca viene richiesta; una risposta breve completa la stessa analisi conservando
+prezzo e conteggio. Capacità ai_suggestion ed external_lookup non autorizzano il
+calcolo. Resta il limite di provenienza già documentato: un valore inventato ma
+falsamente marcato user_input non è verificabile automaticamente dal contratto.
+
+`test/comparable_quantities_m4c_test.dart` usa solo risposte AI simulate: copre
+750 g a 3 EUR → 4 EUR/kg, confezioni incomplete e completamento 330 ml,
+6 × 330 ml → 1,98 L e circa 1,51515 EUR/L, pastiglie, categorie nuove,
+autorità dello schema, provenienza, dimensioni e limiti numerici. Non certifica
+l'interpretazione semantica di un modello remoto. I test live restano opt-in e
+separati; non sono necessari per la suite deterministica M4C.
 
 ## Invarianti
 

@@ -1,6 +1,6 @@
 # Architettura di Risparmiai
 
-Stato: M5B.3. Riferimenti normativi: [principi](SAVINGS_CHECKER_PRINCIPLES.md) e [contratto del planner](M4A_PLANNER_CONTRACT.md).
+Stato: M5B.3 con estensione quantità M4C. Riferimenti normativi: [principi](SAVINGS_CHECKER_PRINCIPLES.md) e [contratto del planner](M4A_PLANNER_CONTRACT.md).
 
 ## Responsabilità
 
