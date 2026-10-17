@@ -107,6 +107,7 @@ class AdmobService implements AdvertisingService {
       counter.lastShown,
       events: counter.events + 1,
       newAnalyses: counter.newAnalyses,
+      chatMessages: counter.chatMessages,
     );
   });
 
@@ -118,6 +119,7 @@ class AdmobService implements AdvertisingService {
       counter.lastShown,
       events: counter.events + 1,
       newAnalyses: counter.newAnalyses + 1,
+      chatMessages: counter.chatMessages,
     );
   });
 
@@ -146,6 +148,18 @@ class AdmobService implements AdvertisingService {
           }),
     );
   }
+
+  @override
+  Future<void> recordChatMessage() => _serialize(() async {
+    final counter = await _store.read();
+    await _store.write(
+      counter.saves,
+      counter.lastShown,
+      events: counter.events + 1,
+      newAnalyses: counter.newAnalyses,
+      chatMessages: counter.chatMessages + 1,
+    );
+  });
 
   @override
   Future<void> showInterstitialIfEligible({
@@ -181,16 +195,21 @@ class AdmobService implements AdvertisingService {
         'interstitial',
         'frequency_check',
         trigger: trigger.name,
-        events: counter.events,
+        events: switch (trigger) {
+          InterstitialTrigger.save => counter.saves,
+          InterstitialTrigger.chat => counter.chatMessages,
+          InterstitialTrigger.newAnalysis => counter.newAnalyses,
+        },
         newAnalyses: counter.newAnalyses,
         cooldownSeconds: remaining <= 0 ? 0 : (remaining / 1000).ceil(),
       );
       if (!policy.isEligible(
-        counter.events,
+        counter.saves,
         _lastShown ?? counter.lastShown,
         now,
         trigger: trigger,
         newAnalyses: counter.newAnalyses,
+        chatMessages: counter.chatMessages,
       )) {
         logAdvertisingEvent(
           'interstitial',
@@ -248,14 +267,18 @@ class AdmobService implements AdvertisingService {
               _serialize(() async {
                 final latest = await _store.read();
                 await _store.write(
-                  latest.saves >= counter.saves
+                  trigger == InterstitialTrigger.save &&
+                          latest.saves >= counter.saves
                       ? latest.saves - counter.saves
-                      : 0,
+                      : latest.saves,
                   _lastShown,
-                  events: latest.events >= counter.events
-                      ? latest.events - counter.events
-                      : 0,
+                  events: latest.events,
                   newAnalyses: latest.newAnalyses,
+                  chatMessages:
+                      trigger == InterstitialTrigger.chat &&
+                          latest.chatMessages >= counter.chatMessages
+                      ? latest.chatMessages - counter.chatMessages
+                      : latest.chatMessages,
                 );
               }).catchError((Object _) {}),
             );

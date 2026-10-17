@@ -75,6 +75,8 @@ class AdHarness {
   Future<void> event(InterstitialTrigger trigger, {bool canShow = true}) async {
     if (trigger == InterstitialTrigger.save) {
       await service.recordSuccessfulSave();
+    } else if (trigger == InterstitialTrigger.chat) {
+      await service.recordChatMessage();
     } else {
       await service.recordNewAnalysis();
     }
@@ -99,60 +101,118 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  test('first two analyses exempt even with shared threshold reached', () {
+  test('independent thresholds and a shared five minute cooldown', () {
     const policy = InterstitialPolicy();
     final now = DateTime.utc(2026);
-    for (final total in [1, 2]) {
-      expect(
-        policy.isEligible(
-          20,
-          null,
-          now,
-          trigger: InterstitialTrigger.newAnalysis,
-          newAnalyses: total,
-        ),
-        isFalse,
-      );
-    }
     expect(
       policy.isEligible(
-        5,
+        0,
         null,
         now,
         trigger: InterstitialTrigger.newAnalysis,
-        newAnalyses: 3,
+        newAnalyses: 1,
       ),
       isTrue,
     );
+    expect(policy.isEligible(4, null, now), isFalse);
+    expect(policy.isEligible(5, null, now), isTrue);
     expect(
-      policy.isEligible(5, now.subtract(const Duration(seconds: 299)), now),
+      policy.isEligible(
+        20,
+        null,
+        now,
+        trigger: InterstitialTrigger.chat,
+        chatMessages: 4,
+      ),
       isFalse,
     );
     expect(
-      policy.isEligible(5, now.subtract(const Duration(minutes: 5)), now),
+      policy.isEligible(
+        0,
+        null,
+        now,
+        trigger: InterstitialTrigger.chat,
+        chatMessages: 5,
+      ),
       isTrue,
     );
-  });
-
-  test('new analyses alone offer every five with a persisted warmup', () async {
-    final h = AdHarness();
-    addTearDown(h.service.dispose);
-    await h.start();
-    for (var i = 1; i <= 5; i++) {
-      await h.event(InterstitialTrigger.newAnalysis);
-      expect(h.shows, i == 5 ? 1 : 0);
+    for (final trigger in InterstitialTrigger.values) {
+      expect(
+        policy.isEligible(
+          5,
+          now.subtract(const Duration(seconds: 299)),
+          now,
+          trigger: trigger,
+          newAnalyses: 1,
+          chatMessages: 5,
+        ),
+        isFalse,
+      );
+      expect(
+        policy.isEligible(
+          5,
+          now.subtract(const Duration(minutes: 5)),
+          now,
+          trigger: trigger,
+          newAnalyses: 1,
+          chatMessages: 5,
+        ),
+        isTrue,
+      );
     }
-    expect((await AdvertisingCounterStore().read()).events, 0);
-    h.time = h.time.add(const Duration(minutes: 5));
-    for (var i = 6; i <= 10; i++) {
-      await h.event(InterstitialTrigger.newAnalysis);
-      expect(h.shows, i == 10 ? 2 : 1);
-    }
-    expect((await AdvertisingCounterStore().read()).newAnalyses, 10);
   });
 
   test(
-    'save and analysis share frequency and cooldown in both directions',
+    'every valid new analysis is an opportunity subject to cooldown',
+    () async {
+      final h = AdHarness();
+      addTearDown(h.service.dispose);
+      await h.start();
+      await h.event(InterstitialTrigger.newAnalysis);
+      expect(h.shows, 1);
+      await h.event(InterstitialTrigger.newAnalysis);
+      expect(h.shows, 1);
+      h.time = h.time.add(const Duration(minutes: 5));
+      await h.event(InterstitialTrigger.newAnalysis);
+      expect(h.shows, 2);
+    },
+  );
+
+  test(
+    'chat and save counters survive other triggers and share cooldown',
+    () async {
+      final h = AdHarness();
+      addTearDown(h.service.dispose);
+      await h.start();
+      for (var i = 0; i < 4; i++) {
+        await h.event(InterstitialTrigger.chat);
+        await h.event(InterstitialTrigger.save);
+      }
+      expect(h.shows, 0);
+      await h.event(InterstitialTrigger.newAnalysis);
+      expect(h.shows, 1);
+      var counters = await AdvertisingCounterStore().read();
+      expect(counters.saves, 4);
+      expect(counters.chatMessages, 4);
+      await h.event(InterstitialTrigger.chat);
+      expect(h.shows, 1);
+      h.time = h.time.add(const Duration(minutes: 5));
+      await h.event(InterstitialTrigger.chat);
+      expect(h.shows, 2);
+      counters = await AdvertisingCounterStore().read();
+      expect(counters.saves, 4);
+      expect(counters.chatMessages, 0);
+      await h.event(InterstitialTrigger.save);
+      expect(h.shows, 2);
+      h.time = h.time.add(const Duration(minutes: 5));
+      await h.event(InterstitialTrigger.save);
+      expect(h.shows, 3);
+      expect((await AdvertisingCounterStore().read()).saves, 0);
+    },
+  );
+
+  test(
+    'save and analysis keep separate thresholds and share cooldown',
     () async {
       final h = AdHarness();
       addTearDown(h.service.dispose);
@@ -218,10 +278,10 @@ void main() {
     addTearDown(h.service.dispose);
     await h.start();
     h.consent = false;
-    await h.event(InterstitialTrigger.save);
+    await h.event(InterstitialTrigger.newAnalysis);
     expect(h.shows, 0);
     h.consent = true;
-    await h.event(InterstitialTrigger.save);
+    await h.event(InterstitialTrigger.newAnalysis);
     expect(h.shows, 1);
   });
 
@@ -260,7 +320,7 @@ void main() {
       );
       expect(h.shows, 1);
       await Future<void>.delayed(Duration.zero);
-      expect((await AdvertisingCounterStore().read()).events, 0);
+      expect((await AdvertisingCounterStore().read()).saves, 0);
       h.ads.first.close!();
       expect(h.ads.first.disposals, 1);
     },
@@ -322,9 +382,10 @@ void main() {
   );
 
   testWidgets(
-    'completions, corrections, pending questions and AI requests offer no ads',
+    'only explicit resets offer ads while completions and AI requests do not',
     (tester) async {
       final gate = Completer<Map<String, dynamic>>();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       final completion = fixture.paper()..['intent'] = 'continue';
       final correction = fixture.paper()..['intent'] = 'correct';
       final client = ScriptClient([
@@ -356,14 +417,14 @@ void main() {
       expect(notifier.hasPendingClarification, isTrue);
       await tester.tap(find.text('Nuova analisi'));
       await tester.pumpAndSettle();
-      expect(ads.newAnalyses, 0);
+      expect(ads.newAnalyses, 1);
       await tester.runAsync(
         () => notifier.analyzeShoppingPrompt('200 strappi'),
       );
       await tester.runAsync(
         () => notifier.analyzeShoppingPrompt('correggo il prezzo'),
       );
-      expect(ads.newAnalyses, 0);
+      expect(ads.newAnalyses, 1);
       await tester.runAsync(
         () => notifier.analyzeShoppingPrompt('quello di prima'),
       );
@@ -371,7 +432,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Nuova analisi'));
       await tester.pumpAndSettle();
-      expect(ads.newAnalyses, 0);
+      expect(ads.newAnalyses, 2);
       late Future<void> request;
       await tester.runAsync(() async {
         request = notifier.analyzeShoppingPrompt('altro prodotto');
@@ -382,11 +443,11 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('Nuova analisi'));
       expect(notifier.isLoading, isTrue);
-      expect(ads.newAnalyses, 0);
+      expect(ads.newAnalyses, 2);
       gate.complete(fixture.paper());
       await tester.runAsync(() => request);
       await tester.pumpAndSettle();
-      expect(ads.opportunities, 0);
+      expect(ads.opportunities, 2);
     },
   );
 

@@ -55,8 +55,7 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
       );
       return;
     }
-    final offerAd =
-        notifier.plannerAnalysis != null && !notifier.hasPendingClarification;
+    final offerAd = notifier.plannerAnalysis != null;
     final ads = context.read<AdvertisingService?>();
     if (!offerAd || ads == null) {
       final reason = ads == null
@@ -333,10 +332,35 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
     if (notifier.isLoading || notifier.isSaving) return;
     final prompt = _controller.text;
     if (prompt.trim().isEmpty) return;
+    final ads = context.read<AdvertisingService?>();
+    final coordinator = ads == null ? null : InterstitialCoordinator(ads);
+    final registration = notifier.planner != null
+        ? coordinator?.recordChatMessage()
+        : null;
     _controller.clear();
     _showLatest();
     await notifier.analyzeShoppingPrompt(prompt);
+    if (!context.mounted) return;
     _showLatest();
+    final analysis = notifier.plannerAnalysis;
+    if (registration != null && analysis != null) {
+      unawaited(
+        coordinator!.afterChatAnalysis(
+          context,
+          registration: registration,
+          canShow: () =>
+              mounted &&
+              !notifier.isLoading &&
+              !notifier.isSaving &&
+              !notifier.hasPendingClarification &&
+              !notifier.hasFailedPlannerTurn &&
+              notifier.failure == null &&
+              notifier.comparablePrice != null &&
+              identical(notifier.plannerAnalysis, analysis) &&
+              _controller.text.isEmpty,
+        ),
+      );
+    }
   }
 }
 

@@ -25,17 +25,26 @@ Incrementare la versione nel domain e nei documenti quando cambia l'informativa.
 ## Integrazione pubblicitaria
 
 `lib/advertising/` mantiene separati domain, data e presentation dal dominio economico.
-Il domain contiene soltanto il contratto interstitial e la politica: una soglia
-condivisa di 5 eventi e almeno 5 minuti fra annunci. Gli eventi sono nuovi
-salvataggi riusciti e pressioni di Nuova analisi dopo un'analisi completata.
-Le prime due nuove analisi non possono mostrare annunci, anche a soglia raggiunta.
-Con sole nuove analisi la prima occasione e alla quinta, poi ogni cinque eventi;
-il cooldown puo rinviare ulteriormente l'occasione. Data integra Google Mobile Ads,
+Il domain contiene soltanto il contratto interstitial e la politica: contatori
+separati per 5 messaggi utente in chat e 5 nuovi salvataggi riusciti, con almeno
+5 minuti globali fra tutti gli interstitial. Ogni clic valido su Nuova analisi
+offre un'occasione se esiste un'analisi precedente da abbandonare, anche incompleta:
+il reset esplicito avviene prima del controllo pubblicitario. Le precedenti soglie
+di due/cinque nuove analisi sono superate da questa politica.
+Data integra Google Mobile Ads,
 consenso UMP, ID demo ufficiali e contatori in `advertising.interstitial.v1`;
 riusa SharedPreferences senza accedere allo storico prezzi o al planner.
-Presentation possiede il banner e coordina gli interstitial dopo un salvataggio
-o il reset esplicito della conversazione. Completamenti, correzioni, chiarimenti
-pendenti e pressioni su una conversazione vuota non generano nuove occasioni.
+Presentation possiede il banner e coordina gli interstitial dopo un salvataggio,
+il reset esplicito o il completamento effettivo di un'analisi AI da messaggio chat.
+La chat conta ogni invio utente accettato una sola volta, senza contare risposte AI
+o retry dello stesso messaggio. Al raggiungimento della soglia mostra soltanto
+dopo un risultato completo: richieste in corso, chiarimenti, errori e piani non
+calcolabili non possono interrompere la conversazione. La soglia resta in attesa
+del successivo invio con risultato completo, anche se include una correzione.
+Il salvataggio o il reset non incrementano il contatore chat; una visualizzazione
+azzera soltanto il contatore della propria origine e aggiorna il timestamp globale.
+I clic su una conversazione vuota non generano occasioni. Ogni occasione resta
+soggetta a disponibilita, consenso e cooldown; non garantisce una visualizzazione.
 Il reset avviene subito e non attende SDK, consenso, caricamento o persistenza.
 Prima di mostrare, il coordinatore ricontrolla che non siano iniziate richieste AI,
 chiarimenti o una nuova interazione; gli annunci non pronti non appaiono in ritardo.
@@ -43,7 +52,8 @@ chiarimenti o una nuova interazione; gli annunci non pronti non appaiono in rita
 con protezione da callback duplicate ed eventi concorrenti. L'adattatore data
 `GoogleAdmobInterstitial` usa esclusivamente l'interstitial ufficiale dell'SDK.
 Il timestamp comune e i contatori sopravvivono al riavvio; i vecchi record v1 sono
-letti conservando salvataggi e timestamp, inizializzando a zero le nuove analisi.
+letti conservando salvataggi e timestamp, inizializzando a zero i contatori mancanti.
+Il campo storico `events` resta diagnostico e non determina piu la frequenza.
 `saveCurrentPrice()` restituisce true soltanto per una nuova osservazione persistita.
 Errori e duplicati non generano opportunita pubblicitarie. Gli annunci non pronti
 vengono saltati; non compaiono successivamente durante un'altra interazione.

@@ -9,6 +9,12 @@ import 'package:risparmiai/advertising/presentation/interstitial_coordinator.dar
 
 class FakeAdvertising implements AdvertisingService {
   int newAnalyses = 0;
+  int chatMessages = 0;
+  @override
+  Future<void> recordChatMessage() async {
+    chatMessages++;
+  }
+
   @override
   Future<void> recordNewAnalysis() async {
     newAnalyses++;

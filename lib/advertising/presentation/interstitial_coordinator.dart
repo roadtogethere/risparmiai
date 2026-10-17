@@ -6,6 +6,36 @@ class InterstitialCoordinator {
   const InterstitialCoordinator(this.service);
   final AdvertisingService service;
 
+  Future<bool> recordChatMessage() async {
+    try {
+      await service.recordChatMessage();
+      return true;
+    } catch (_) {
+      logAdvertisingEvent('interstitial', 'event_failed', trigger: 'chat');
+      return false;
+    }
+  }
+
+  Future<void> afterChatAnalysis(
+    BuildContext context, {
+    required Future<bool> registration,
+    required bool Function() canShow,
+  }) async {
+    try {
+      if (!await registration || !context.mounted || !canShow()) return;
+      await service.showInterstitialIfEligible(
+        trigger: InterstitialTrigger.chat,
+        canShow: () =>
+            context.mounted &&
+            canShow() &&
+            ModalRoute.of(context)?.isCurrent == true &&
+            WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
+      );
+    } catch (_) {
+      logAdvertisingEvent('interstitial', 'event_failed', trigger: 'chat');
+    }
+  }
+
   Future<void> afterSave(
     BuildContext context, {
     required bool newlySaved,
