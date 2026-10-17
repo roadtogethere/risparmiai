@@ -92,6 +92,13 @@ class SavedPrice {
   final DateTime savedAt;
 }
 
+class PriceHistorySummary {
+  const PriceHistorySummary({required this.count, this.minimum, this.average});
+  final int count;
+  final double? minimum;
+  final double? average;
+}
+
 class SavePriceResult {
   const SavePriceResult(this.observation, {required this.alreadySaved});
   final SavedPrice observation;

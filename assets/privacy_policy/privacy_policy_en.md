@@ -1,6 +1,6 @@
 # RisparmiAi Privacy Notice
 
-**Updated on 17 October 2026 — version 2026-10-17.1**
+**Updated on 17 October 2026 — version 2026-10-17.2**
 
 ## At a glance
 
@@ -43,7 +43,7 @@ Providers may process data outside the European Economic Area. Their service ter
 
 ## 6. Retention and deletion
 
-Local data stays until you clear app data in device settings. Uninstallation, backups and restoration depend on the operating system and device or account settings. Selective deletion of saved prices is not currently available in the app.
+You can delete individual observations on the saved prices page using **Elimina prezzo**, with **Annulla** (Undo) available for a few seconds. Deleted observations no longer participate in comparisons; the minimum, average and count update from the remaining observations. To also remove custom categories and local settings, clear app data in device settings. Uninstallation, backups and restoration depend on the operating system and device or account settings.
 
 Connections to the services mentioned use HTTPS; we do not claim additional encryption of local storage. Local deletion does not automatically delete data already received by providers: their notices, retention periods and support channels also apply.
 

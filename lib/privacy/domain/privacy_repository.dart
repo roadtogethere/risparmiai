@@ -1,4 +1,4 @@
-const privacyNoticeVersion = '2026-10-17.1';
+const privacyNoticeVersion = '2026-10-17.2';
 
 abstract interface class PrivacyRepository {
   Future<bool> hasViewedCurrentNotice();

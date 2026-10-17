@@ -141,13 +141,16 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
           IconButton(
             icon: const Icon(Icons.inventory_2_outlined),
             tooltip: 'Archivio',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => notifier.planner != null
-                    ? const VerifiedPricesPage()
-                    : const ArchivePage(),
-              ),
-            ),
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => notifier.planner != null
+                      ? const VerifiedPricesPage()
+                      : const ArchivePage(),
+                ),
+              );
+              if (mounted) await notifier.refreshPriceHistory();
+            },
           ),
         ],
       ),

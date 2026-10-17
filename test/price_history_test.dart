@@ -31,6 +31,12 @@ Future<ComparablePrice> priced(double price, {double quantity = 1}) async {
 }
 
 class DelayedHistory implements VerifiedPriceHistory {
+  @override
+  Future<SavedPrice?> delete(String observationId) async =>
+      throw UnimplementedError();
+  @override
+  Future<void> restore(SavedPrice observation) async =>
+      throw UnimplementedError();
   final gate = Completer<void>();
   int writes = 0;
   bool fail = false;
@@ -511,7 +517,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(VerifiedPricesPage), findsOneWidget);
       expect(find.text('Prezzi salvati'), findsOneWidget);
-      expect(find.text('water'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(ListTile),
+          matching: find.text('water'),
+        ),
+        findsOneWidget,
+      );
       await tester.pumpWidget(const SizedBox());
       notifier.dispose();
     },

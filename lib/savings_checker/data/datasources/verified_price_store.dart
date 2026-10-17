@@ -138,14 +138,7 @@ class VerifiedPriceStore implements VerifiedPriceHistory {
       }
       // One document write persists schema, facts and observation together.
       final saved = SavedPrice(price, DateTime.now().toUtc());
-      final encoded = jsonEncode({
-        'version': 1,
-        'observations': [...records, saved].map(_encode).toList(),
-      });
-      final prefs = await SharedPreferences.getInstance();
-      if (!await prefs.setString(storageKey, encoded)) {
-        throw StateError('Unable to save price.');
-      }
+      await _write([...records, saved]);
       return SavePriceResult(saved, alreadySaved: false);
     });
     _pending = operation.then<void>(
@@ -153,6 +146,76 @@ class VerifiedPriceStore implements VerifiedPriceHistory {
       onError: (Object error, StackTrace trace) {},
     );
     return operation;
+  }
+
+  Future<T> _enqueue<T>(Future<T> Function() action) {
+    final operation = _pending.then((_) => action());
+    _pending = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
+  }
+
+  @override
+  Future<SavedPrice?> delete(String observationId) => _enqueue(() async {
+    final records = await _read();
+    final index = records.indexWhere(
+      (entry) => entry.price.observationId == observationId,
+    );
+    if (index < 0) return null;
+    final removed = records.removeAt(index);
+    try {
+      await _write(records);
+    } catch (_) {
+      // A lost acknowledgement may follow a successful write. Reload disk
+      // before reporting failure, so a persisted deletion still offers undo.
+      final persisted = await _read();
+      if (persisted.any(
+        (entry) => entry.price.observationId == observationId,
+      )) {
+        rethrow;
+      }
+    }
+    return removed;
+  });
+
+  @override
+  Future<void> restore(SavedPrice observation) => _enqueue(() async {
+    final price = ComparablePrice.fromAnalysis(observation.price.analysis);
+    if (!price.canSave || !price.samePriceAs(observation.price)) {
+      throw const FormatException('Invalid observation to restore.');
+    }
+    final records = await _read();
+    for (final existing in records) {
+      if (existing.price.observationId == price.observationId) {
+        if (!existing.price.samePriceAs(price)) {
+          throw StateError('Saved revision is immutable.');
+        }
+        return; // Repeated undo never duplicates an observation.
+      }
+      if (existing.price.categoryKey == price.categoryKey &&
+          existing.price.canonicalMetric != price.canonicalMetric) {
+        throw const FormatException('Conflicting historical metric.');
+      }
+    }
+    // Preserve identity, timestamp, facts and original ordering during undo.
+    final index = records.indexWhere(
+      (entry) => entry.savedAt.isAfter(observation.savedAt),
+    );
+    records.insert(index < 0 ? records.length : index, observation);
+    await _write(records);
+  });
+
+  Future<void> _write(List<SavedPrice> records) async {
+    final encoded = jsonEncode({
+      'version': 1,
+      'observations': records.map(_encode).toList(),
+    });
+    final prefs = await SharedPreferences.getInstance();
+    if (!await prefs.setString(storageKey, encoded)) {
+      throw StateError('Unable to write verified prices.');
+    }
   }
 
   static Map<String, dynamic> _encode(SavedPrice observation) {

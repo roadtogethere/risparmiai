@@ -1,6 +1,6 @@
 # Informativa privacy di RisparmiAi
 
-**Aggiornata il 17 ottobre 2026 — versione 2026-10-17.1**
+**Aggiornata il 17 ottobre 2026 — versione 2026-10-17.2**
 
 ## In breve
 
@@ -43,7 +43,7 @@ I fornitori possono trattare dati fuori dallo Spazio economico europeo. Si appli
 
 ## 6. Conservazione e cancellazione
 
-I dati locali restano finché non cancelli i dati dell'app dalle impostazioni del dispositivo. Disinstallazione, backup e ripristino dipendono dal sistema operativo e dalle impostazioni del dispositivo o dell'account. Non è attualmente disponibile una cancellazione selettiva dei prezzi nell'app.
+Puoi eliminare le singole osservazioni dalla pagina Prezzi salvati usando **Elimina prezzo**, con possibilità di **Annulla** per alcuni secondi. Un'osservazione eliminata non partecipa più ai confronti; minimo, media e conteggio si aggiornano sulle osservazioni rimaste. Per cancellare anche categorie e impostazioni locali puoi cancellare i dati dell'app dalle impostazioni del dispositivo. Disinstallazione, backup e ripristino dipendono dal sistema operativo e dalle impostazioni del dispositivo o dell'account.
 
 Le connessioni ai servizi citati usano HTTPS; non dichiariamo una cifratura aggiuntiva dell'archivio locale. Cancellare i dati locali non elimina automaticamente quelli già ricevuti dai fornitori: valgono anche le loro informative, i tempi di conservazione e i canali di assistenza.
 

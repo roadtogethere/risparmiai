@@ -103,6 +103,23 @@ Chat e card condividono lo scorrimento, con input e azione **Nuova analisi** est
 
 ## Catalogo e storico
 
+Le osservazioni verificate possono essere eliminate singolarmente in Prezzi salvati.
+`VerifiedPriceHistory.delete(observationId)` restituisce l'osservazione rimossa;
+`restore` la reinserisce senza cambiare identita, revisione, fatti o data e senza
+duplicarla. Save, delete e restore condividono la coda seriale di VerifiedPriceStore,
+leggono nuovamente il disco e scrivono un unico documento. Un errore di scrittura
+non produce una riscrittura basata su una copia obsoleta dello storico.
+
+La pagina offre Elimina prezzo e Annulla per 6 secondi, senza dialogo di conferma.
+L'eliminazione e subito persistita; chiudere la pagina o l'app non la annulla.
+Un errore di ripristino offre Riprova. Una nuova eliminazione sostituisce la
+possibilita di annullare quella precedente. Le statistiche sono calcolate dalle
+osservazioni rimaste, per categoria e metrica, tramite PriceComparisonService;
+l'ultimo prezzo eliminato porta allo stato senza storico, mai a un minimo zero.
+Rientrando in chat refreshPriceHistory aggiorna confronto e stato del salvataggio
+dell'analisi corrente, conservando identita e fatti. Delete/restore non incrementano
+i contatori pubblicitari e non modificano gli aggregati legacy.
+
 - `assets/json/default_categories.json`: catalogo statico, read-only. Gli aggregati eventualmente presenti non sono osservazioni economiche verificate.
 - `CategoryReferenceStore`: catalogo effettivo e schemi personalizzati in `user_custom_categories`, gestiti da Dart con le regole M3.
 - `VerifiedPriceStore`: osservazioni verificate separate in `verified_price_observations_v1`, con fatti/schema, identità/revisione, quantità, costo non arrotondato e data.

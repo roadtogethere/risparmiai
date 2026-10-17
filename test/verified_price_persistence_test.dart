@@ -73,4 +73,50 @@ void main() {
     expect(await store.read(), hasLength(1));
     expect(writes, 1);
   });
+
+  for (final mode in ['false', 'throw']) {
+    test(
+      'delete and undo write failures ($mode) preserve disk and can retry',
+      () async {
+        final price = await fixture.priced(0.1412);
+        await store.save(price);
+        final before = Map<String, Object>.from(disk);
+        failure = mode;
+        await expectLater(
+          store.delete(price.observationId),
+          throwsA(anyOf(isA<StateError>(), isA<PlatformException>())),
+        );
+        expect(disk, before);
+        expect(await store.read(), hasLength(1));
+        failure = '';
+        final removed = await store.delete(price.observationId);
+        final empty = Map<String, Object>.from(disk);
+        failure = mode;
+        await expectLater(
+          store.restore(removed!),
+          throwsA(anyOf(isA<StateError>(), isA<PlatformException>())),
+        );
+        expect(disk, empty);
+        expect(await store.read(), isEmpty);
+        failure = '';
+        await store.restore(removed);
+        expect(await store.read(), hasLength(1));
+      },
+    );
+  }
+
+  test(
+    'lost delete acknowledgement still returns the record for undo',
+    () async {
+      final price = await fixture.priced(0.1412);
+      await store.save(price);
+      failure = 'after_write';
+      final removed = await store.delete(price.observationId);
+      expect(removed!.price.observationId, price.observationId);
+      failure = '';
+      expect(await store.read(), isEmpty);
+      await store.restore(removed);
+      expect(await store.read(), hasLength(1));
+    },
+  );
 }

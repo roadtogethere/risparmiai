@@ -135,6 +135,36 @@ class SavingsChatNotifier extends ChangeNotifier {
     await _analyzePlannerTurn(_failedAttempt!, appendUserMessage: false);
   }
 
+  Future<void> refreshPriceHistory() async {
+    final price = _price;
+    if (price == null || _isLoading || _isSaving) return;
+    final generation = _plannerGeneration;
+    try {
+      final history = await _priceHistory.read();
+      if (generation != _plannerGeneration ||
+          _price != price ||
+          _isLoading ||
+          _isSaving) {
+        return;
+      }
+      _priceComparison = const PriceComparisonService().compare(price, history);
+      final stillSaved = history.any(
+        (entry) =>
+            entry.price.observationId == price.observationId ||
+            (entry.price.analysis.id == price.analysis.id &&
+                entry.price.samePriceAs(price)),
+      );
+      _savedRevision = stillSaved ? price.observationId : null;
+      _saveMessage = null;
+      notifyListeners();
+    } catch (_) {
+      if (generation != _plannerGeneration || _price != price) return;
+      _priceComparison = null;
+      _failure = const SavingsFailure(SavingsFailureKind.storageError);
+      notifyListeners();
+    }
+  }
+
   @override
   void dispose() {
     _plannerGeneration++;
