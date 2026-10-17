@@ -121,6 +121,9 @@ class SavingsChatNotifier extends ChangeNotifier {
   PlannerAnalysis? _plannerAnalysis;
   List<Map<String, String>> _clarificationTurns = [];
   PlannerAnalysis? get plannerAnalysis => _plannerAnalysis;
+  bool get hasPendingClarification =>
+      _clarificationTurns.isNotEmpty ||
+      _plannerAnalysis?.needsInformation == true;
   _PlannerAttempt? _failedAttempt;
   int _plannerGeneration = 0;
   int _analysisNumber = 1;

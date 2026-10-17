@@ -1,4 +1,10 @@
+enum InterstitialTrigger { save, newAnalysis }
+
 abstract interface class AdvertisingService {
   Future<void> recordSuccessfulSave();
-  Future<void> showInterstitialIfEligible({required bool Function() canShow});
+  Future<void> recordNewAnalysis();
+  Future<void> showInterstitialIfEligible({
+    InterstitialTrigger trigger = InterstitialTrigger.save,
+    required bool Function() canShow,
+  });
 }

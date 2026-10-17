@@ -1,4 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../advertising/domain/advertising_service.dart';
+import '../../../advertising/data/advertising_debug_log.dart';
+import '../../../advertising/presentation/interstitial_coordinator.dart';
 import 'package:provider/provider.dart';
 import '../../../privacy/domain/privacy_repository.dart';
 import '../../../privacy/presentation/privacy_policy_page.dart';
@@ -38,10 +42,49 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
   }
 
   void _newAnalysis(SavingsChatNotifier notifier) {
-    if (notifier.isLoading || notifier.isSaving) return;
+    logAdvertisingEvent(
+      'interstitial',
+      'new_analysis_clicked',
+      trigger: 'newAnalysis',
+    );
+    if (notifier.isLoading || notifier.isSaving) {
+      logAdvertisingEvent(
+        'interstitial',
+        'skipped_processing',
+        trigger: 'newAnalysis',
+      );
+      return;
+    }
+    final offerAd =
+        notifier.plannerAnalysis != null && !notifier.hasPendingClarification;
+    final ads = context.read<AdvertisingService?>();
+    if (!offerAd || ads == null) {
+      final reason = ads == null
+          ? 'skipped_service_missing'
+          : notifier.hasPendingClarification
+          ? 'skipped_pending_clarification'
+          : 'skipped_empty_analysis';
+      logAdvertisingEvent('interstitial', reason, trigger: 'newAnalysis');
+    }
     notifier.startNewAnalysis();
     _controller.clear();
     _showLatest();
+    final analysisNumber = notifier.analysisNumber;
+    if (offerAd && ads != null) {
+      unawaited(
+        InterstitialCoordinator(ads).afterNewAnalysis(
+          context,
+          canShow: () =>
+              mounted &&
+              !notifier.isLoading &&
+              !notifier.isSaving &&
+              !notifier.hasPendingClarification &&
+              notifier.analysisNumber == analysisNumber &&
+              notifier.plannerAnalysis == null &&
+              _controller.text.isEmpty,
+        ),
+      );
+    }
   }
 
   @override

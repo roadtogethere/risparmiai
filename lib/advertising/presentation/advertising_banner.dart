@@ -3,6 +3,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
 import '../data/admob_ids.dart';
 import '../data/admob_service.dart';
+import '../data/advertising_debug_log.dart';
 
 class AdvertisingBanner extends StatefulWidget {
   const AdvertisingBanner({super.key});
@@ -55,8 +56,14 @@ class _AdvertisingBannerState extends State<AdvertisingBanner> {
               return;
             }
             setState(() => _loaded = true);
+            logAdvertisingEvent('banner', 'loaded');
           },
-          onAdFailedToLoad: (ad, _) {
+          onAdImpression: (_) => logAdvertisingEvent('banner', 'impression'),
+          onAdOpened: (_) => logAdvertisingEvent('banner', 'opened'),
+          onAdClicked: (_) => logAdvertisingEvent('banner', 'clicked'),
+          onAdClosed: (_) => logAdvertisingEvent('banner', 'closed'),
+          onAdFailedToLoad: (ad, error) {
+            logAdvertisingEvent('banner', 'load_failed', errorCode: error.code);
             ad.dispose();
             if (mounted && generation == _generation) {
               setState(() {
@@ -70,7 +77,7 @@ class _AdvertisingBannerState extends State<AdvertisingBanner> {
       _ad = ad;
       await ad.load();
     } catch (_) {
-      /* Leave the application usable without ads. */
+      logAdvertisingEvent('banner', 'load_exception');
     }
   }
 

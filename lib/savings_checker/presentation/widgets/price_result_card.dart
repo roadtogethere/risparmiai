@@ -65,9 +65,16 @@ class PriceResultCard extends StatelessWidget {
                           final ads = context.read<AdvertisingService?>();
                           final newlySaved = await notifier.saveCurrentPrice();
                           if (!context.mounted || ads == null) return;
-                          await InterstitialCoordinator(
-                            ads,
-                          ).afterSave(context, newlySaved: newlySaved);
+                          await InterstitialCoordinator(ads).afterSave(
+                            context,
+                            newlySaved: newlySaved,
+                            canShow: () =>
+                                !notifier.isLoading &&
+                                !notifier.isSaving &&
+                                !notifier.hasPendingClarification &&
+                                notifier.comparablePrice?.observationId ==
+                                    price.observationId,
+                          );
                         }
                       : null,
                   child: Text(

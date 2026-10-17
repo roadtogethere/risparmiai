@@ -25,11 +25,25 @@ Incrementare la versione nel domain e nei documenti quando cambia l'informativa.
 ## Integrazione pubblicitaria
 
 `lib/advertising/` mantiene separati domain, data e presentation dal dominio economico.
-Il domain contiene soltanto il contratto interstitial e la politica: 5 nuovi
-salvataggi e almeno 2 minuti fra annunci. Data integra Google Mobile Ads,
+Il domain contiene soltanto il contratto interstitial e la politica: una soglia
+condivisa di 5 eventi e almeno 5 minuti fra annunci. Gli eventi sono nuovi
+salvataggi riusciti e pressioni di Nuova analisi dopo un'analisi completata.
+Le prime due nuove analisi non possono mostrare annunci, anche a soglia raggiunta.
+Con sole nuove analisi la prima occasione e alla quinta, poi ogni cinque eventi;
+il cooldown puo rinviare ulteriormente l'occasione. Data integra Google Mobile Ads,
 consenso UMP, ID demo ufficiali e contatori in `advertising.interstitial.v1`;
 riusa SharedPreferences senza accedere allo storico prezzi o al planner.
-Presentation possiede il banner e coordina gli interstitial dopo un salvataggio.
+Presentation possiede il banner e coordina gli interstitial dopo un salvataggio
+o il reset esplicito della conversazione. Completamenti, correzioni, chiarimenti
+pendenti e pressioni su una conversazione vuota non generano nuove occasioni.
+Il reset avviene subito e non attende SDK, consenso, caricamento o persistenza.
+Prima di mostrare, il coordinatore ricontrolla che non siano iniziate richieste AI,
+chiarimenti o una nuova interazione; gli annunci non pronti non appaiono in ritardo.
+`AdmobService` ricontrolla UMP prima di mostrare e usa un solo annuncio precaricato,
+con protezione da callback duplicate ed eventi concorrenti. L'adattatore data
+`GoogleAdmobInterstitial` usa esclusivamente l'interstitial ufficiale dell'SDK.
+Il timestamp comune e i contatori sopravvivono al riavvio; i vecchi record v1 sono
+letti conservando salvataggi e timestamp, inizializzando a zero le nuove analisi.
 `saveCurrentPrice()` restituisce true soltanto per una nuova osservazione persistita.
 Errori e duplicati non generano opportunita pubblicitarie. Gli annunci non pronti
 vengono saltati; non compaiono successivamente durante un'altra interazione.

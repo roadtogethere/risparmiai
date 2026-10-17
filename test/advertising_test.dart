@@ -8,6 +8,12 @@ import 'package:risparmiai/advertising/domain/interstitial_policy.dart';
 import 'package:risparmiai/advertising/presentation/interstitial_coordinator.dart';
 
 class FakeAdvertising implements AdvertisingService {
+  int newAnalyses = 0;
+  @override
+  Future<void> recordNewAnalysis() async {
+    newAnalyses++;
+  }
+
   int saves = 0;
   int opportunities = 0;
   bool fail = false;
@@ -19,6 +25,7 @@ class FakeAdvertising implements AdvertisingService {
 
   @override
   Future<void> showInterstitialIfEligible({
+    InterstitialTrigger trigger = InterstitialTrigger.save,
     required bool Function() canShow,
   }) async {
     if (canShow()) opportunities++;
@@ -40,7 +47,7 @@ void main() {
         isFalse,
       );
       expect(
-        policy.isEligible(5, now.subtract(const Duration(minutes: 2)), now),
+        policy.isEligible(5, now.subtract(const Duration(minutes: 5)), now),
         isTrue,
       );
       expect(
