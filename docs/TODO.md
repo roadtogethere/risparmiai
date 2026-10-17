@@ -1,6 +1,6 @@
 # TODO di Risparmiai
 
-Aggiornato il 17 ottobre 2026. Riferimento verificato: HEAD `3ae833c`.
+Aggiornato il 17 ottobre 2026. Riferimento verificato: HEAD `ae37a83`.
 Questo documento raccoglie attività future: non descrive funzionalità già disponibili.
 I requisiti e i criteri sotto sono da implementare e verificare.
 
@@ -48,6 +48,11 @@ economico né al contratto JSON del planner.
 
 ### Dipendenze e verifiche preliminari
 
+- Coordinare le metriche e il calcolatore dei costi con
+  [AI Cost Optimization — Prompt Caching & Usage Metrics](#todo-3--ai-cost-optimization--prompt-caching--usage-metrics).
+  Le metriche raccolte saranno successivamente utilizzate dal proxy per budget,
+  quote e monitoraggio server-side; i controlli del proxy dovranno basarsi su dati
+  verificati lato server, senza fidarsi di conteggi dichiarati dall'app.
 - Prima dell'implementazione, audit di `OpenAiSavingsClient`, costruzione dei
   payload, gestione della chiave, errori, timeout e retry; includere il trasporto
   HTTP condiviso e il bootstrap delle dipendenze.
@@ -131,3 +136,75 @@ L'eliminazione con annullamento è già implementata e non deve essere rifatta.
   in caso di errore i dati precedenti restano recuperabili senza aggiornamenti parziali.
 - Verificate compatibilità con eliminazione/annullamento, esclusione degli aggregati
   legacy e assenza di scritture economiche implicite da analisi o risposte AI.
+
+Questa attività resta indipendente dall'ottimizzazione dei costi AI descritta
+nel TODO 3 e non ne richiede il completamento.
+
+## TODO 3 — AI Cost Optimization — Prompt Caching & Usage Metrics
+
+**Priorità:** alta — prima della beta pubblica.
+
+**Stato:** TODO / NON IMPLEMENTATO.
+
+### Obiettivo
+
+Ridurre e misurare i costi delle richieste a OpenAI GPT-6 Luna senza modificare
+il comportamento funzionale del planner. Questa attività approfondisce il formato
+del prefisso e la misurazione dei consumi; il
+[TODO 1 — Proxy AI e monitoraggio dei costi](#todo-1--proxy-ai-e-monitoraggio-dei-costi)
+mantiene la responsabilità di segreti, protezioni e limiti server-side.
+
+### Requisiti
+
+1. Stabilizzare l'ordine delle categorie e la serializzazione del catalogo inviato
+   all'AI, mantenendo la precedenza autoritativa degli schemi locali.
+2. Spostare il catalogo prima dei contenuti conversazionali variabili per favorire
+   il prompt caching, senza cambiare contenuti, contratto o regole del planner.
+3. Rilevare `prompt_tokens`, `cached_tokens`, `completion_tokens` ed eventuali
+   `reasoning_tokens` dai campi dell'endpoint utilizzato. Distinguere input normale
+   e cached input; evitare di conteggiare due volte i token di ragionamento già
+   inclusi nel totale di output. Segnalare metriche mancanti senza inventare valori.
+4. Registrare modello effettivo, latenza, numero di tentativi e risultato della
+   richiesta, senza conservare conversazioni o dati dei prodotti. Distinguere
+   richieste logiche, tentativi verso il provider e analisi completa su più turni.
+5. Preparare un calcolatore di costo stimato con tariffe configurabili per modello,
+   input normale, cached input e output, senza prezzi hardcoded; includere i retry
+   e rendere espliciti eventuali consumi non misurabili.
+6. Verificare tramite chiamate reali cache hit rate e costo medio per analisi
+   completa, confrontando una baseline con il prefisso ottimizzato. Le chiamate
+   reali fanno parte della futura implementazione, non di questo aggiornamento.
+7. Garantire compatibilità con continuazioni, correzioni, retry e categorie
+   open-world; stabilizzare la rappresentazione senza eliminare contesto necessario
+   o alterare l'autorità del catalogo.
+8. Non modificare matematica Dart, storico o salvataggio dei prezzi; rispettare
+   la separazione `domain/data/presentation` e il contratto `AiSavingsClient`.
+
+### Dipendenze e verifiche preliminari
+
+- Riprendere l'audit locale del percorso OpenAI e verificare endpoint, modello,
+  composizione dei messaggi e ordine del catalogo prima di apportare modifiche.
+- Verificare documentazione e tariffe applicabili a GPT-6 Luna, supporto del caching,
+  campi usage e condizioni delle misure; non assumere un cache hit garantito.
+- Concordare con il TODO 1 un formato di metriche e un calcolo dei costi riutilizzabili:
+  il proxy userà successivamente queste metriche per budget, quote e monitoraggio
+  server-side, senza duplicare sistemi di contabilizzazione o log sensibili.
+- Definire casi riproducibili, credenziali di test e un budget per le future chiamate
+  reali, usando contenuti di prova senza dati personali o prodotti degli utenti.
+- Nessuna dipendenza dal TODO 2 «Modifica dei prezzi salvati»: le due attività
+  rimangono separate e possono procedere indipendentemente.
+
+### Criteri di completamento
+
+- Catalogo serializzato in modo stabile a parità di contenuto e prefisso stabile
+  prima dei dati conversazionali variabili, senza regressioni funzionali del planner.
+- Metriche previste rilevate e consultabili, distinguendo dati mancanti, modello
+  effettivo, tentativi e analisi completa; nessun testo di conversazione o dato
+  prodotto nei log delle metriche.
+- Calcolatore verificato con tariffe configurabili e casi di input normale,
+  cached input, output, ragionamento e retry, senza doppi conteggi.
+- Misure reali documentate di cache hit rate e costo medio per analisi completa,
+  con baseline, condizioni di prova e limiti della stima; nessun risparmio dichiarato
+  sulla sola base della disposizione del prompt.
+- Verificate continuazioni, correzioni, retry e categorie nuove; matematica Dart,
+  storico e salvataggio invariati. Riutilizzo delle metriche da parte del futuro
+  proxy documentato, senza segnare il TODO 1 come implementato.
