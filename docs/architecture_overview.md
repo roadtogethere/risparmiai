@@ -1,6 +1,28 @@
 # Architettura di Risparmiai
 
-## Pubblicita trasversale
+## Informativa privacy
+
+`lib/privacy/` separa il contratto `PrivacyRepository` nel domain, il caricamento
+degli asset e SharedPreferences in data, e le schermate in presentation.
+`PrivacyNoticeGate` mostra un riepilogo al primo avvio e quando cambia
+`privacyNoticeVersion`. La chiave `privacy.viewed_notice_version` registra solo
+la presa visione, mai il consenso pubblicitario. Un errore di lettura ripropone
+il riepilogo; un errore di scrittura permette di riprovare senza avviare AdMob.
+`main.dart` inietta il repository e collega l'avvio AdMob al callback del gate,
+dopo il frame della pagina principale. La chat non e montata prima di proseguire.
+I test possono omettere il repository; l'entry point reale lo fornisce sempre.
+
+L'icona privacy nella chat riapre `PrivacyPolicyPage`. I testi IT/EN in
+`assets/privacy_policy/` vengono caricati offline e renderizzati come Markdown;
+i link HTTPS/email si aprono soltanto su azione dell'utente. La lingua iniziale
+segue le lingue supportate IT/EN, con selezione manuale nel documento completo.
+L'informativa descrive dati locali, API OpenAI/Gemini e AdMob/UMP. Non dichiara
+che AdMob sia l'unico destinatario o che i dati locali siano cifrati dall'app.
+Il contatto email e confermato; l'identita del titolare e ancora da completare
+prima della pubblicazione, per scelta dell'autore di non inserirla in questa fase.
+Incrementare la versione nel domain e nei documenti quando cambia l'informativa.
+
+## Integrazione pubblicitaria
 
 `lib/advertising/` mantiene separati domain, data e presentation dal dominio economico.
 Il domain contiene soltanto il contratto interstitial e la politica: 5 nuovi
@@ -15,7 +37,7 @@ Il coordinatore controlla pagina corrente e app in primo piano prima di mostrare
 Il banner compare soltanto in fondo alla pagina Prezzi salvati, fuori dall'elenco.
 
 `main.dart` inietta il servizio concreto; MainApp permette di ometterlo nei test.
-L'inizializzazione SDK e il consenso partono dopo il primo frame da main.dart,
+L'inizializzazione SDK e il consenso partono dopo la presa visione dell'informativa,
 senza bloccare l'avvio dell'app. Le preferenze privacy sono accessibili quando UMP
 le richiede. In assenza di consenso valido o in caso di errore l'app resta usabile
 senza annunci. Le piattaforme diverse da Android/iOS non inizializzano l'SDK.

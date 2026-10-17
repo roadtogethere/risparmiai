@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../privacy/domain/privacy_repository.dart';
+import '../../../privacy/presentation/privacy_policy_page.dart';
 
 import '../../domain/entities/product_analysis.dart';
 import '../models/chat_message.dart';
@@ -126,6 +128,16 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
+          if (context.read<PrivacyRepository?>() case final privacy?)
+            IconButton(
+              icon: const Icon(Icons.privacy_tip_outlined),
+              tooltip: 'Informativa privacy',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => PrivacyPolicyPage(repository: privacy),
+                ),
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.inventory_2_outlined),
             tooltip: 'Archivio',

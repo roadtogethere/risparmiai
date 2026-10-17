@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'advertising/data/admob_service.dart';
 import 'advertising/domain/advertising_service.dart';
+import 'privacy/data/asset_privacy_repository.dart';
+import 'privacy/domain/privacy_repository.dart';
+import 'privacy/presentation/privacy_notice_gate.dart';
 
 import 'savings_checker/data/datasources/ai_savings_client.dart';
 import 'savings_checker/data/datasources/gemini_savings_client.dart';
@@ -79,11 +83,9 @@ Future<void> main() async {
       useMockData: useMockData,
       aiClient: aiClient,
       advertisingService: advertisingService,
+      privacyRepository: AssetPrivacyRepository(),
     ),
   );
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(advertisingService.initialize());
-  });
 }
 
 class MainApp extends StatelessWidget {
@@ -92,16 +94,19 @@ class MainApp extends StatelessWidget {
     required this.useMockData,
     this.aiClient,
     this.advertisingService,
+    this.privacyRepository,
   });
 
   final bool useMockData;
   final AiSavingsClient? aiClient;
   final AdmobService? advertisingService;
+  final PrivacyRepository? privacyRepository;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        Provider<PrivacyRepository?>.value(value: privacyRepository),
         Provider<AdmobService?>(
           create: (_) => advertisingService,
           dispose: (_, service) => service?.dispose(),
@@ -121,9 +126,21 @@ class MainApp extends StatelessWidget {
           ),
         ),
         child: MaterialApp(
+          supportedLocales: const [Locale('it'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
           title: 'Verifica Risparmio',
           debugShowCheckedModeBanner: false,
-          home: SavingsCheckerPage(isDemo: useMockData),
+          home: privacyRepository == null
+              ? SavingsCheckerPage(isDemo: useMockData)
+              : PrivacyNoticeGate(
+                  repository: privacyRepository!,
+                  onReady: () {
+                    if (advertisingService != null) {
+                      unawaited(advertisingService!.initialize());
+                    }
+                  },
+                  child: SavingsCheckerPage(isDemo: useMockData),
+                ),
         ),
       ),
     );
