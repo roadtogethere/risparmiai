@@ -2,9 +2,9 @@ import 'advertising_service.dart';
 
 class InterstitialPolicy {
   const InterstitialPolicy({
-    this.savesPerAd = 5,
-    this.messagesPerAd = 5,
-    this.minimumInterval = const Duration(minutes: 5),
+    this.savesPerAd = 3,
+    this.messagesPerAd = 3,
+    this.minimumInterval = const Duration(minutes: 3),
   }) : assert(savesPerAd > 0),
        assert(messagesPerAd > 0);
 
