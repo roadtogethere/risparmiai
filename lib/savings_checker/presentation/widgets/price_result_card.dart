@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../advertising/domain/advertising_service.dart';
+import '../../../advertising/presentation/interstitial_coordinator.dart';
 
 import '../../domain/entities/price_analysis.dart';
 import '../notifiers/savings_chat_notifier.dart';
@@ -58,7 +61,14 @@ class PriceResultCard extends StatelessWidget {
               if (price.canSave)
                 FilledButton(
                   onPressed: notifier.canSavePrice
-                      ? notifier.saveCurrentPrice
+                      ? () async {
+                          final ads = context.read<AdvertisingService?>();
+                          final newlySaved = await notifier.saveCurrentPrice();
+                          if (!context.mounted || ads == null) return;
+                          await InterstitialCoordinator(
+                            ads,
+                          ).afterSave(context, newlySaved: newlySaved);
+                        }
                       : null,
                   child: Text(
                     notifier.priceSaved

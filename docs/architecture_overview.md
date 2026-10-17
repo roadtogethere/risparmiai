@@ -1,5 +1,36 @@
 # Architettura di Risparmiai
 
+## Pubblicita trasversale
+
+`lib/advertising/` mantiene separati domain, data e presentation dal dominio economico.
+Il domain contiene soltanto il contratto interstitial e la politica: 5 nuovi
+salvataggi e almeno 2 minuti fra annunci. Data integra Google Mobile Ads,
+consenso UMP, ID demo ufficiali e contatori in `advertising.interstitial.v1`;
+riusa SharedPreferences senza accedere allo storico prezzi o al planner.
+Presentation possiede il banner e coordina gli interstitial dopo un salvataggio.
+`saveCurrentPrice()` restituisce true soltanto per una nuova osservazione persistita.
+Errori e duplicati non generano opportunita pubblicitarie. Gli annunci non pronti
+vengono saltati; non compaiono successivamente durante un'altra interazione.
+Il coordinatore controlla pagina corrente e app in primo piano prima di mostrare.
+Il banner resta fuori dalla conversazione e viene nascosto con la tastiera aperta.
+
+`main.dart` inietta il servizio concreto; MainApp permette di ometterlo nei test.
+L'inizializzazione SDK e il consenso partono dal lifecycle della presentazione,
+senza bloccare l'avvio dell'app. Le preferenze privacy sono accessibili quando UMP
+le richiede. In assenza di consenso valido o in caso di errore l'app resta usabile
+senza annunci. Le piattaforme diverse da Android/iOS non inizializzano l'SDK.
+
+Configurazione attuale: solo annunci di test, Android minimo API 24. Per la
+produzione sostituire gli ID in `advertising/data/admob_ids.dart`, l'app ID nel
+manifest Android e GADApplicationIdentifier in Info.plist, e configurare i messaggi
+privacy nel proprio account AdMob. Non inserire ID pubblicitari nel planner o in .env.
+Rigenerare e verificare l'app su dispositivo; i test Dart non verificano le UI native
+di consenso o la consegna degli annunci.
+
+Riferimenti: [integrazione SDK](https://developers.google.com/admob/flutter/quick-start),
+[consenso UMP](https://developers.google.com/admob/flutter/privacy),
+[annunci di test](https://developers.google.com/admob/flutter/test-ads).
+
 Stato: M5B.3 con estensione quantità M4C. Riferimenti normativi: [principi](SAVINGS_CHECKER_PRINCIPLES.md) e [contratto del planner](M4A_PLANNER_CONTRACT.md).
 
 ## Responsabilità

@@ -61,8 +61,8 @@ class SavingsChatNotifier extends ChangeNotifier {
       _priceComparison != null &&
       _price?.canSave == true;
 
-  Future<void> saveCurrentPrice() async {
-    if (!canSavePrice) return;
+  Future<bool> saveCurrentPrice() async {
+    if (!canSavePrice) return false;
     final price = _price!;
     _isSaving = true;
     _saveMessage = null;
@@ -75,10 +75,12 @@ class SavingsChatNotifier extends ChangeNotifier {
           ? 'Questo prezzo è già stato salvato.'
           : 'Prezzo salvato.';
       // Keep the original comparison: saving must not make the price its own reference.
+      return !saved.alreadySaved;
     } catch (_) {
       _failure = const SavingsFailure(SavingsFailureKind.storageError);
       _saveMessage =
           '${_failure!.message} Salvataggio non riuscito. Puoi riprovare.';
+      return false;
     } finally {
       _isSaving = false;
       notifyListeners();

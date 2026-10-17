@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'advertising/data/admob_service.dart';
+import 'advertising/domain/advertising_service.dart';
 
 import 'savings_checker/data/datasources/ai_savings_client.dart';
 import 'savings_checker/data/datasources/gemini_savings_client.dart';
@@ -70,31 +72,54 @@ Future<void> main() async {
     'Risparmiai startup: final provider = ${useMockData ? 'mock' : providerName}; usingMockData = $useMockData',
   );
 
-  runApp(MainApp(useMockData: useMockData, aiClient: aiClient));
+  runApp(
+    MainApp(
+      useMockData: useMockData,
+      aiClient: aiClient,
+      advertisingService: AdmobService(),
+    ),
+  );
 }
 
 class MainApp extends StatelessWidget {
-  const MainApp({super.key, required this.useMockData, this.aiClient});
+  const MainApp({
+    super.key,
+    required this.useMockData,
+    this.aiClient,
+    this.advertisingService,
+  });
 
   final bool useMockData;
   final AiSavingsClient? aiClient;
+  final AdmobService? advertisingService;
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<SavingsChatNotifier>(
-      create: (_) => SavingsChatNotifier(
-        planner: useMockData
-            ? null
-            : QuantityPlannerRepositoryImpl(aiClient: aiClient),
-        repository: SavingsRepositoryImpl(
-          useMockData: useMockData,
-          aiClient: aiClient,
+    return MultiProvider(
+      providers: [
+        Provider<AdmobService?>(
+          create: (_) => advertisingService,
+          dispose: (_, service) => service?.dispose(),
         ),
-      ),
-      child: MaterialApp(
-        title: 'Verifica Risparmio',
-        debugShowCheckedModeBanner: false,
-        home: SavingsCheckerPage(isDemo: useMockData),
+        Provider<AdvertisingService?>(
+          create: (context) => context.read<AdmobService?>(),
+        ),
+      ],
+      child: ChangeNotifierProvider<SavingsChatNotifier>(
+        create: (_) => SavingsChatNotifier(
+          planner: useMockData
+              ? null
+              : QuantityPlannerRepositoryImpl(aiClient: aiClient),
+          repository: SavingsRepositoryImpl(
+            useMockData: useMockData,
+            aiClient: aiClient,
+          ),
+        ),
+        child: MaterialApp(
+          title: 'Verifica Risparmio',
+          debugShowCheckedModeBanner: false,
+          home: SavingsCheckerPage(isDemo: useMockData),
+        ),
       ),
     );
   }
