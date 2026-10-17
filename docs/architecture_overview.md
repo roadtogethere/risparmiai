@@ -59,6 +59,15 @@ Stato: M5B.3 con estensione quantità M4C. Riferimenti normativi: [principi](SAV
 
 ## Responsabilità
 
+Le evoluzioni pianificate sono raccolte soltanto in [TODO di progetto](TODO.md):
+[proxy AI e costi](TODO.md#todo-1--proxy-ai-e-monitoraggio-dei-costi) (alta priorità,
+prima della beta agli amici) e [modifica dei prezzi salvati](TODO.md#todo-2--modifica-dei-prezzi-salvati)
+(media priorità). Entrambe sono **TODO / NON IMPLEMENTATO**.
+Il percorso live descritto sotto resta quello corrente: il proxy non è ancora
+presente e la correzione conversazionale non aggiorna un'osservazione già salvata.
+L'eliminazione con annullamento è invece già disponibile, come descritto in
+«Catalogo e storico». I requisiti futuri non modificano le responsabilità attuali.
+
 Il progetto Flutter segue una struttura feature-first ispirata alla Clean Architecture:
 
 - `domain`: entità, contratti, validazione delle quantità e calcoli economici.

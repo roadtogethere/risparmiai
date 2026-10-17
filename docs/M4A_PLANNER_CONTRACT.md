@@ -4,6 +4,23 @@ Questo documento descrive M4A e le successive estensioni M4B, M5B e M4C.
 I limiti storici di M4A sulla sola quantità sono superati dal percorso M4B
 descritto sotto; M4C conserva le operazioni matematiche del contratto AI.
 
+## Attività future e confini del contratto
+
+Il [TODO di progetto](TODO.md) registra proxy AI/monitoraggio costi e modifica
+delle osservazioni salvate, entrambi **TODO / NON IMPLEMENTATO**. Il futuro proxy
+dovrà restare compatibile con `AiSavingsClient` e questo contratto: autenticazione,
+quote e contabilità dei consumi non sono nuovi campi o operazioni del planner.
+L'audit del client e dell'hosting precederà l'implementazione.
+
+La futura modifica di un prezzo salvato sarà un'azione esplicita sullo storico,
+distinta dalla correzione conversazionale descritta sotto. Richiederà la verifica
+dei fatti effettivamente persistiti in M4B e delle regole di identità/revisione;
+non autorizza oggi l'AI a modificare record salvati. L'eliminazione con annullamento
+è già implementata: il comportamento corrente è documentato in
+[Catalogo e storico](architecture_overview.md#catalogo-e-storico).
+Questi riferimenti non cambiano il JSON, le operazioni matematiche o i vincoli
+di validazione del contratto attuale.
+
 ## Percorso attivo
 
 `MainApp` collega i provider reali a `QuantityPlannerRepositoryImpl` tramite
