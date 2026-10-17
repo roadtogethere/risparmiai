@@ -49,7 +49,7 @@ Operazioni: direct/convert con operand; multiply con operands di esattamente due
 Esempio multiply: rolls_count {value:12,unit:"roll",source:"user_input"} e
 sheets_per_roll {value:200,unit:"sheet",per:"roll",source:"user_input"}.
 Non calcolare totali, costi, medie, risparmi o convenienza. Non includere altri campi.
-Non fornire fattori di conversione: Dart supporta milliliter/liter e gram/kilogram.
+Non fornire fattori di conversione: Dart supporta milliliter/centiliter/liter e gram/kilogram.
 multiply può convertire il risultato nella metrica canonica usando solo queste
 conversioni fisiche locali. Conserva valori e unità dichiarati nei facts, senza
 precalcolare o normalizzare i numeri: Dart moltiplica e converte il risultato.

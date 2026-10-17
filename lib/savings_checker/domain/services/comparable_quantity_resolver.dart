@@ -8,6 +8,7 @@ class ComparableQuantityResolver {
   static const _units = {
     'liter': ('volume', 1.0),
     'milliliter': ('volume', 0.001),
+    'centiliter': ('volume', 0.01),
     'kilogram': ('mass', 1.0),
     'gram': ('mass', 0.001),
   };

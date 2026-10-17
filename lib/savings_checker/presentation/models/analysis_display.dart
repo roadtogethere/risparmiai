@@ -70,6 +70,7 @@ class AnalysisDisplay {
     'EUR': '€',
     'liter': 'L',
     'milliliter': 'ml',
+    'centiliter': 'cl',
     'kilogram': 'kg',
     'gram': 'g',
     'roll': 'rotoli',

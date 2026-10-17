@@ -175,7 +175,7 @@ che il planner non ha mai estratto; i turni originali restano nel contesto AI.
 ### CONVERT e categorie nuove
 
 `{"type":"convert","operand":"volume"}` usa esclusivamente il registro
-Dart milliliter/liter e gram/kilogram. Il target viene dallo schema. Fattori
+Dart milliliter/centiliter/liter e gram/kilogram. Il target viene dallo schema. Fattori
 forniti dall'AI sono rifiutati.
 
 Per categorie sconosciute `category.proposal` deve contenere:
@@ -206,6 +206,15 @@ registro fisico locale già usato da CONVERT. Per esempio, 6 can × 330
 milliliter/can produce 1980 milliliter e quindi 1,98 liter. Il JSON resta quello
 esistente: due operandi, nessuna sequenza, fattore AI o operazione annidata.
 Prodotto intermedio e quantità finale devono essere finiti e positivi.
+
+Il registro di volume comprende `milliliter`, `centiliter` e `liter`, con scale
+rispettivamente 0,001, 0,01 e 1 rispetto al litro. Vale per CONVERT e per la
+conversione finale di MULTIPLY, in entrambe le direzioni e senza regole per prodotto.
+Per esempio, 6 bottle × 66 centiliter/bottle = 396 centiliter = 3,96 liter;
+con prezzo 4 EUR il costo calcolato in Dart è circa 1,0101 EUR/liter.
+`test/volume_units_test.dart` verifica conversioni, completamento simulato `66cl`,
+provenienza dei fatti e rifiuto delle dimensioni incompatibili. Il test non attesta
+il JSON restituito da un provider nel test Android e non effettua chiamate remote.
 
 La capacità dei contenitori non si deduce dal loro conteggio o da formati standard.
 Se manca viene richiesta; una risposta breve completa la stessa analisi conservando
