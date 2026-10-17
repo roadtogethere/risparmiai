@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../advertising/presentation/advertising_banner.dart';
 
 import '../../data/datasources/verified_price_store.dart';
 import '../../domain/entities/price_analysis.dart';
@@ -17,6 +18,7 @@ class _VerifiedPricesPageState extends State<VerifiedPricesPage> {
       .read();
   @override
   Widget build(BuildContext context) => Scaffold(
+    bottomNavigationBar: const SafeArea(child: AdvertisingBanner()),
     appBar: AppBar(
       title: const Text('Prezzi salvati'),
       actions: [

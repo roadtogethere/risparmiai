@@ -26,7 +26,7 @@ class AdmobService implements AdvertisingService {
   }
 
   Future<bool> _initialize() async {
-    if (!AdmobIds.supported || _disposed) return false;
+    if (!AdmobIds.configured || _disposed) return false;
     try {
       final consent = Completer<void>();
       ConsentInformation.instance.requestConsentInfoUpdate(

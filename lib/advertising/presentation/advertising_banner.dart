@@ -38,7 +38,7 @@ class _AdvertisingBannerState extends State<AdvertisingBanner> {
     try {
       final ready = await service.initialize();
       final privacy =
-          AdmobIds.supported && await service.privacyOptionsRequired();
+          AdmobIds.configured && await service.privacyOptionsRequired();
       if (!mounted || generation != _generation) return;
       setState(() => _privacyRequired = privacy);
       if (!ready) return;

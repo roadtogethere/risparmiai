@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../advertising/presentation/advertising_banner.dart';
 
 import '../../domain/entities/product_analysis.dart';
 import '../models/chat_message.dart';
@@ -112,9 +111,6 @@ class _SavingsCheckerPageState extends State<SavingsCheckerPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
-      bottomNavigationBar: MediaQuery.viewInsetsOf(context).bottom > 0
-          ? null
-          : const SafeArea(child: AdvertisingBanner()),
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0.5,

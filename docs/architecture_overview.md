@@ -12,16 +12,18 @@ Presentation possiede il banner e coordina gli interstitial dopo un salvataggio.
 Errori e duplicati non generano opportunita pubblicitarie. Gli annunci non pronti
 vengono saltati; non compaiono successivamente durante un'altra interazione.
 Il coordinatore controlla pagina corrente e app in primo piano prima di mostrare.
-Il banner resta fuori dalla conversazione e viene nascosto con la tastiera aperta.
+Il banner compare soltanto in fondo alla pagina Prezzi salvati, fuori dall'elenco.
 
 `main.dart` inietta il servizio concreto; MainApp permette di ometterlo nei test.
-L'inizializzazione SDK e il consenso partono dal lifecycle della presentazione,
+L'inizializzazione SDK e il consenso partono dopo il primo frame da main.dart,
 senza bloccare l'avvio dell'app. Le preferenze privacy sono accessibili quando UMP
 le richiede. In assenza di consenso valido o in caso di errore l'app resta usabile
 senza annunci. Le piattaforme diverse da Android/iOS non inizializzano l'SDK.
 
-Configurazione attuale: solo annunci di test, Android minimo API 24. Per la
-produzione sostituire gli ID in `advertising/data/admob_ids.dart`, l'app ID nel
+Configurazione attuale: annunci di test in debug/profile, Android minimo API 24.
+In release si usano le quattro costanti production in `advertising/data/admob_ids.dart`;
+se manca uno dei due ID della piattaforma, gli annunci restano disattivati.
+Per la produzione compilare queste costanti e sostituire l'app ID nel
 manifest Android e GADApplicationIdentifier in Info.plist, e configurare i messaggi
 privacy nel proprio account AdMob. Non inserire ID pubblicitari nel planner o in .env.
 Rigenerare e verificare l'app su dispositivo; i test Dart non verificano le UI native

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
@@ -72,13 +73,17 @@ Future<void> main() async {
     'Risparmiai startup: final provider = ${useMockData ? 'mock' : providerName}; usingMockData = $useMockData',
   );
 
+  final advertisingService = AdmobService();
   runApp(
     MainApp(
       useMockData: useMockData,
       aiClient: aiClient,
-      advertisingService: AdmobService(),
+      advertisingService: advertisingService,
     ),
   );
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(advertisingService.initialize());
+  });
 }
 
 class MainApp extends StatelessWidget {
